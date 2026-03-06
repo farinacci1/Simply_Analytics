@@ -43,7 +43,7 @@
 
 /* Embedded header styling */
 .dashboard-edit-panel .embedded-editor-header {
-  padding: 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
   flex-shrink: 0;

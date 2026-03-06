@@ -177,6 +177,15 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
+/* Edit-mode click overlay: transparent layer that captures clicks
+   so chart SVGs, zoom behaviors, and headers don't swallow them */
+.widget-edit-click-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  cursor: pointer;
+}
+
 /* Widget border actions - floating top right, visible on hover */
 .widget-border-actions {
   position: absolute;

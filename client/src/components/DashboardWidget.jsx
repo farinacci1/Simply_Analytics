@@ -1413,6 +1413,16 @@ const DashboardWidget = ({
           </div>
         )}
       </div>
+      {/* Edit-mode click overlay: captures clicks that charts/headers absorb */}
+      {isEditMode && !isSelected && (
+        <div
+          className="widget-edit-click-overlay"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onSelect) onSelect(widget);
+          }}
+        />
+      )}
       
       {/* Resize handles are provided by GridStack natively */}
 

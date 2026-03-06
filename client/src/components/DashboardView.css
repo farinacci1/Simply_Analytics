@@ -439,9 +439,9 @@
 .toolbar-title-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  flex-wrap: wrap;
+  overflow: hidden;
 }
 
 .toolbar-title-group h2,
@@ -453,7 +453,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 /* Meta info row */

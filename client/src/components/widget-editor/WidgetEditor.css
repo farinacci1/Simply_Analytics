@@ -28,11 +28,12 @@
   .embedded-editor-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 8px;
+    padding: 10px 10px;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--bg-secondary);
     flex-shrink: 0;
+    overflow: hidden;
     animation: headerSlideIn 0.3s ease-out 0.1s both;
   }
   
@@ -49,6 +50,7 @@
   
   .embedded-title-input {
     flex: 1;
+    min-width: 0;
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-sm);
@@ -70,7 +72,7 @@
   
   .embedded-header-actions {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
   }
   
