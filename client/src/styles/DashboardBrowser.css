@@ -17,8 +17,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 32px;
-  border-bottom: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   flex-shrink: 0;
   gap: 24px;
   min-height: 72px;
@@ -242,7 +241,7 @@
 .browser-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: 0 32px 24px;
 }
 
 /* Loading & Error */
@@ -442,8 +441,29 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 24px;
+  min-height: calc(100vh - 200px);
+  padding: 48px 24px;
   text-align: center;
+  border: 1px dashed var(--border-primary);
+  border-radius: 16px;
+  margin-top: 24px;
+  background: var(--bg-secondary);
+}
+
+.empty-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
+  margin-bottom: 24px;
+}
+
+.empty-icon-wrapper svg {
+  font-size: 2rem;
+  color: var(--accent-primary, #6366f1);
 }
 
 .empty-icon {
@@ -453,17 +473,18 @@
 }
 
 .browser-empty h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 8px 0;
 }
 
 .browser-empty p {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
-  margin: 0 0 24px 0;
-  max-width: 400px;
+  margin: 0 0 28px 0;
+  max-width: 360px;
+  line-height: 1.5;
 }
 
 /* Search Results */
@@ -565,6 +586,7 @@
 .create-folder-modal {
   width: 400px;
   max-width: 90vw;
+  padding: 0;
 }
 
 .create-folder-modal .modal-body {
@@ -601,11 +623,7 @@
 }
 
 .create-folder-modal .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-primary);
+  border-top: none;
 }
 
 /* Responsive */
@@ -628,14 +646,7 @@
     padding: 4px 6px;
   }
   
-  /* Hide "New" text on smaller screens, show only + icon */
-  .add-menu-container > .btn span {
-    display: none;
-  }
-  
-  .add-menu-container > .btn {
-    padding: 8px 12px;
-  }
+
 }
 
 @media (max-width: 768px) {
@@ -646,12 +657,7 @@
     gap: 12px;
   }
   
-  .header-left {
-    order: 1;
-  }
-  
   .header-right {
-    order: 0;
     width: 100%;
     justify-content: space-between;
   }
@@ -688,12 +694,8 @@
     font-size: 1.25rem;
   }
   
-  .header-right button span {
+  .add-menu-container > .btn span {
     display: none;
-  }
-  
-  .add-menu-item span {
-    display: inline;
   }
   
   .breadcrumb-item span {
@@ -787,13 +789,6 @@
   flex-shrink: 0;
 }
 
-.move-dashboard-modal .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-primary);
-}
 
 /* Folder selector dropdown in move modal */
 .move-dashboard-modal .folder-selector {

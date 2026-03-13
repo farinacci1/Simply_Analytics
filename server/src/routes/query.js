@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getConnection, executeQuery, getSampleData } from '../db/snowflake.js';
+import { getConnection, executeQuery, getSampleData } from '../db/dashboardSessionManager.js';
 
 export const queryRoutes = Router();
 

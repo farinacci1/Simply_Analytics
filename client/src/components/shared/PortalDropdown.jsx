@@ -9,7 +9,6 @@
  */
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import './PortalDropdown.css';
 
 const PortalDropdown = ({
   isOpen,

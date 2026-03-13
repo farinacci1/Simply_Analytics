@@ -11,7 +11,7 @@ import {
   FiAlertTriangle
 } from 'react-icons/fi';
 import { twoFactorApi } from '../api/apiClient';
-import './TwoFactorSettings.css';
+import '../styles/TwoFactorSettingsModal.css';
 
 // Helper functions for WebAuthn - browser independent
 function base64urlToArrayBuffer(base64url) {
@@ -88,7 +88,7 @@ async function nativeStartRegistration(options) {
   return response;
 }
 
-const TwoFactorSettings = () => {
+const TwoFactorSettingsModal = () => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -99,6 +99,7 @@ const TwoFactorSettings = () => {
   const [totpCode, setTotpCode] = useState('');
   const [totpVerifying, setTotpVerifying] = useState(false);
   const [backupCodes, setBackupCodes] = useState(null);
+  const [totpError, setTotpError] = useState(null);
   
   // TOTP Disable State
   const [showDisableTotp, setShowDisableTotp] = useState(false);
@@ -153,7 +154,7 @@ const TwoFactorSettings = () => {
   const verifyTotpCode = async () => {
     try {
       setTotpVerifying(true);
-      setError(null);
+      setTotpError(null);
       const result = await twoFactorApi.verifyTotp(totpCode);
       
       if (result.success) {
@@ -161,7 +162,7 @@ const TwoFactorSettings = () => {
         await loadStatus();
       }
     } catch (err) {
-      setError(err.message);
+      setTotpError(err.message);
     } finally {
       setTotpVerifying(false);
     }
@@ -186,6 +187,7 @@ const TwoFactorSettings = () => {
     setShowTotpSetup(false);
     setTotpSetupData(null);
     setTotpCode('');
+    setTotpError(null);
     setBackupCodes(null);
   };
 
@@ -254,20 +256,19 @@ const TwoFactorSettings = () => {
         <FiLoader className="spinner" />
         <span>Loading security settings...</span>
       </div>
+
     );
   }
 
   return (
     <div className="two-factor-settings">
-      {/* Section Header - matches UserSettings pattern */}
       <div className="section-header">
         <div>
           <h2><FiShield /> Multi-Factor Authentication</h2>
-          <p>Add an extra layer of security to your account</p>
+          <p>Protect your account with authenticator apps and passkeys</p>
         </div>
       </div>
 
-      {/* Section Card - wraps all content */}
       <div className="section-card tfa-card">
         {error && (
           <div className="alert error">
@@ -452,15 +453,22 @@ const TwoFactorSettings = () => {
                       maxLength={6}
                       autoComplete="one-time-code"
                     />
-                    <button 
-                      className="verify-btn"
-                      onClick={verifyTotpCode}
-                      disabled={totpCode.length !== 6 || totpVerifying}
-                    >
-                      {totpVerifying ? <FiLoader className="spinner" /> : <FiCheck />}
-                      Verify
-                    </button>
+                    {totpCode.length === 6 && (
+                      <button 
+                        className="verify-btn-inline"
+                        onClick={verifyTotpCode}
+                        disabled={totpVerifying}
+                      >
+                        {totpVerifying ? <FiLoader className="spinner" /> : <FiCheck />}
+                      </button>
+                    )}
                   </div>
+                  {totpError && (
+                    <div className="totp-inline-error">
+                      <FiAlertCircle />
+                      <span>{totpError}</span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="loading-setup">
@@ -527,19 +535,19 @@ const TwoFactorSettings = () => {
               <button className="close-btn" onClick={() => setShowPasskeyModal(false)}><FiX /></button>
             </div>
             <div className="modal-body">
-              <p>Give your passkey a name to identify it later (e.g., "MacBook Touch ID", "iPhone").</p>
-              <div className="form-group">
-                <label>Passkey Name (optional)</label>
+              <div className="passkey-form-group">
+                <label>Passkey Name <span className="label-hint">(optional)</span></label>
                 <input
                   type="text"
                   value={passkeyName}
                   onChange={e => setPasskeyName(e.target.value)}
                   placeholder="e.g., MacBook Pro"
+                  autoFocus
                 />
               </div>
-              <p className="info-text">
-                When you click "Register", your browser will prompt you to use your fingerprint, face, 
-                or security key.
+              <p className="passkey-hint">
+                <FiShield />
+                Your browser will prompt for fingerprint, face, or security key.
               </p>
             </div>
             <div className="modal-footer">
@@ -552,7 +560,7 @@ const TwoFactorSettings = () => {
                 disabled={addingPasskey}
               >
                 {addingPasskey ? <FiLoader className="spinner" /> : <FiKey />}
-                Register Passkey
+                Register
               </button>
             </div>
           </div>
@@ -599,4 +607,4 @@ const TwoFactorSettings = () => {
   );
 };
 
-export default TwoFactorSettings;
+export default TwoFactorSettingsModal;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WidgetEditor from './widget-editor';
-import './DashboardEditPanel.css';
+import '../styles/DashboardEditPanel.css';
 
 /**
  * DashboardEditPanel - A slide-in left panel for editing widgets

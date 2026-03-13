@@ -3,13 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
-import DashboardWidget from './DashboardWidget';
-import WidgetEditor from './widget-editor';
-import DashboardEditPanel from './DashboardEditPanel';
-import DashboardSettings from './DashboardSettings';
-import CreateDashboardModal from './CreateDashboardModal';
-import ConfirmDeleteDialog from './ConfirmDeleteDialog';
-import { useToast } from './Toast';
+import DashboardWidget from '../components/DashboardWidget';
+import WidgetEditor from '../components/widget-editor';
+import DashboardEditPanel from '../components/DashboardEditPanel';
+import DashboardSettingsModal from '../components/DashboardSettingsModal';
+import CreateDashboardModal from '../components/CreateDashboardModal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useToast } from '../components/Toast';
 import {
   FiGrid,
   FiPlus,
@@ -55,8 +55,8 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { sfConnectionApi } from '../api/apiClient';
-import CortexAgentChat from './CortexAgentChat';
-import './DashboardView.css';
+import CortexAgentChat from '../components/CortexAgentChat';
+import '../styles/DashboardView.css';
 
 // Debug logging
 const DEBUG = import.meta.env.VITE_DEBUG === 'true';
@@ -1983,7 +1983,7 @@ const DashboardView = () => {
       )}
 
       {/* Dashboard Settings */}
-      <DashboardSettings
+      <DashboardSettingsModal
         dashboard={currentDashboard}
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
@@ -1992,7 +1992,7 @@ const DashboardView = () => {
 
       {/* Delete Confirmation Dialog */}
       {deleteConfirm.open && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           itemName={deleteConfirm.itemName}
           itemType={deleteConfirm.itemType}
           onConfirm={deleteConfirm.onConfirm}

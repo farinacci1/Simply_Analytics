@@ -1,6 +1,6 @@
 /**
- * User Settings - Clean & Minimal Design
- * Focus: Whitespace, subtle interactions, unified styling
+ * User Settings - Polished & Consistent Design
+ * Matches DashboardBrowser / UsersManagement visual language
  */
 
 /* ============================================
@@ -14,9 +14,12 @@
   overflow-x: hidden;
 }
 
-/* Header - Minimal */
 .settings-header {
-  padding: 32px 40px 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 24px 40px 16px;
+  background: var(--bg-primary);
 }
 
 .header-content {
@@ -25,32 +28,26 @@
   gap: 14px;
 }
 
-.header-icon {
-  font-size: 24px;
-  color: var(--text-muted);
-}
-
 .settings-header h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.5px;
 }
 
 .settings-header p {
-  margin: 2px 0 0;
-  font-size: 14px;
+  margin: 4px 0 0;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 /* Content Area */
 .settings-content {
-  max-width: 720px;
-  padding: 0 40px 60px;
+  max-width: 760px;
+  padding: 32px 40px 60px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
 }
 
 /* ============================================
@@ -58,19 +55,19 @@
    ============================================ */
 
 .settings-section {
-  animation: fadeIn 0.25s ease;
+  animation: settingsFadeIn 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+@keyframes settingsFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
 }
 
 .section-header h2 {
@@ -78,29 +75,36 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .section-header h2 svg {
-  font-size: 16px;
-  opacity: 0.6;
+  font-size: 17px;
+  color: var(--accent-color);
+  opacity: 0.8;
 }
 
 .section-header p {
-  margin: 0;
+  margin: 3px 0 0;
   font-size: 13px;
   color: var(--text-muted);
 }
 
 .section-card {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 24px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.section-card:hover {
+  box-shadow: var(--shadow-card-hover);
 }
 
 /* ============================================
@@ -110,7 +114,7 @@
 .profile-card {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
 }
 
 .profile-row {
@@ -123,7 +127,7 @@
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  background: var(--accent-color);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: white;
   display: flex;
   align-items: center;
@@ -131,6 +135,7 @@
   font-size: 20px;
   font-weight: 600;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.25);
 }
 
 .profile-info {
@@ -151,19 +156,21 @@
 
 .role-badge {
   padding: 6px 12px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--accent-bg);
+  color: var(--accent-color);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
 .profile-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 24px;
   padding-top: 20px;
+  margin-top: 20px;
   border-top: 1px solid var(--border-primary);
 }
 
@@ -177,7 +184,7 @@
 
 .detail-item svg {
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .text-btn {
@@ -188,9 +195,11 @@
   font-weight: 500;
   cursor: pointer;
   padding: 0;
+  transition: opacity 0.15s;
 }
 
 .text-btn:hover {
+  opacity: 0.8;
   text-decoration: underline;
 }
 
@@ -224,15 +233,16 @@
   padding: 12px 40px 12px 14px;
   border: 1px solid var(--border-primary);
   border-radius: 8px;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .password-field input:focus {
   outline: none;
   border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
 .password-field input::placeholder {
@@ -303,11 +313,13 @@
 .form-alert.error {
   background: rgba(239, 68, 68, 0.08);
   color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 .form-alert.success {
   background: rgba(16, 185, 129, 0.08);
   color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .dismiss-btn {
@@ -362,7 +374,7 @@
 }
 
 .icon-btn:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -378,7 +390,7 @@
 .connections-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .connection-row {
@@ -389,17 +401,18 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 10px;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .connection-row:hover {
   border-color: var(--border-secondary);
+  background: var(--bg-hover);
 }
 
 .connection-icon {
   width: 40px;
   height: 40px;
-  background: var(--accent-color);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -434,10 +447,12 @@
 
 .status-dot.active {
   background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 .status-dot.inactive {
   background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
 }
 
 .connection-meta {
@@ -528,9 +543,9 @@
 .empty-state {
   text-align: center;
   padding: 48px 32px;
-  background: var(--bg-secondary);
-  border: 1px dashed var(--border-primary);
-  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-lg);
 }
 
 .empty-icon {
@@ -582,7 +597,7 @@
    Modal
    ============================================ */
 
-.modal-overlay {
+.user-settings .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -593,43 +608,20 @@
   z-index: 1000;
 }
 
-.modal {
-  background: var(--bg-secondary);
+.user-settings .modal {
+  background: var(--bg-card);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 480px;
   max-height: 85vh;
-  overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  animation: modalIn 0.2s ease;
+  box-shadow: var(--shadow-xl);
+  animation: settingsModalIn 0.2s ease;
 }
 
-@keyframes modalIn {
+@keyframes settingsModalIn {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-primary);
-}
-
-.modal-header h2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.modal-header h2 svg {
-  color: var(--text-muted);
 }
 
 .modal-close {
@@ -644,38 +636,23 @@
 }
 
 .modal-close:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 24px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-primary);
-  background: var(--bg-primary);
 }
 
 /* ============================================
    Form Elements
    ============================================ */
 
-.form-group {
+.user-settings .form-group {
   margin-bottom: 20px;
 }
 
-.form-group:last-child {
+.user-settings .form-group:last-child {
   margin-bottom: 0;
 }
 
-.form-group label {
+.user-settings .form-group label {
   display: block;
   margin-bottom: 8px;
   font-size: 13px;
@@ -683,33 +660,34 @@
   color: var(--text-secondary);
 }
 
-.form-group input,
-.form-group select,
-.form-group textarea {
+.user-settings .form-group input,
+.user-settings .form-group select,
+.user-settings .form-group textarea {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--border-primary);
   border-radius: 8px;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
   font-family: inherit;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
+.user-settings .form-group input:focus,
+.user-settings .form-group select:focus,
+.user-settings .form-group textarea:focus {
   outline: none;
   border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
-.form-group input::placeholder,
-.form-group textarea::placeholder {
+.user-settings .form-group input::placeholder,
+.user-settings .form-group textarea::placeholder {
   color: var(--text-muted);
 }
 
-.form-group textarea {
+.user-settings .form-group textarea {
   resize: vertical;
   min-height: 100px;
   font-family: 'SF Mono', 'Fira Code', monospace;
@@ -749,9 +727,9 @@
 }
 
 .auth-toggle-btn.active {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Test Section */
@@ -776,7 +754,7 @@
 }
 
 .test-btn:hover:not(:disabled) {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   border-color: var(--border-secondary);
 }
 
@@ -793,11 +771,13 @@
 .test-result.success {
   background: rgba(16, 185, 129, 0.08);
   color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .test-result.error {
   background: rgba(239, 68, 68, 0.08);
   color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 /* Modal Buttons */
@@ -830,7 +810,7 @@
 }
 
 .modal-btn.secondary:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
 }
 
 .modal-btn:disabled {
@@ -858,12 +838,8 @@
    ============================================ */
 
 @media (max-width: 768px) {
-  .settings-header {
-    padding: 24px 20px 20px;
-  }
-  
   .settings-content {
-    padding: 0 20px 40px;
+    padding: 24px 20px 40px;
     gap: 24px;
   }
   
@@ -917,12 +893,8 @@
 }
 
 @media (max-width: 480px) {
-  .settings-header {
-    padding: 20px 16px;
-  }
-  
   .settings-content {
-    padding: 0 16px 32px;
+    padding: 20px 16px 32px;
   }
   
   .section-card {
@@ -943,7 +915,7 @@
     display: none;
   }
   
-  .modal {
+  .user-settings .modal {
     width: 95%;
   }
 }

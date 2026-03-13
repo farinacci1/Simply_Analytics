@@ -9,7 +9,7 @@ import {
   FiType,
   FiZap,
 } from 'react-icons/fi';
-import './FormulaBar.css';
+import '../../../styles/FormulaBar.css';
 
 // SQL/Snowflake functions for autocomplete
 const FORMULA_FUNCTIONS = [

@@ -1,300 +1,301 @@
-# Simply Analytics
+<h1 align="center">Simply Analytics</h1>
 
-A modern analytics platform for Snowflake with drag-and-drop dashboards, semantic views, user management, and Cortex AI integration. Built entirely in JavaScript.
+<p align="center">
+  An open-source analytics platform for Snowflake with drag-and-drop dashboards, 25+ visualization types, and enterprise security.
+</p>
 
-![Simply Analytics](https://img.shields.io/badge/Snowflake-Analytics-00d4ff?style=for-the-badge)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Metadata-336791?style=for-the-badge)
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#docker-deployment">Docker</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#contributing">Contributing</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Snowflake-Powered-00d4ff?style=flat-square&logo=snowflake" />
+  <img src="https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react" />
+  <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+</p>
+
+---
 
 ## Features
 
-### 🔐 User Management
-- PostgreSQL-based user authentication
-- Role-based access control (Owner, Admin, Editor, Viewer)
-- User groups for dashboard sharing
-- Single-session enforcement
-- JWT-based session management with 8-hour expiry
+### Dashboards
+- **25+ visualization types** — bar, line, area, pie, donut, scatter, bubble, heatmap, treemap, sunburst, sankey, funnel, icicle, radar, histogram, boxplot, violin, choropleth, bubble map, metric cards, data tables, pivot tables
+- **Drag-and-drop widget editor** with field shelves, aggregation controls, filters, sorts, and calculated fields
+- **Adaptive and fixed layouts** with multi-tab support
+- **Real-time data refresh** from Snowflake
 
-### 🔌 Snowflake Integration
-- Multiple connection configurations per user
-- PAT token and Key Pair authentication
-- Connection pooling and caching
-- Role and warehouse switching
-- Network policy error handling with reconnect
+### Snowflake Integration
+- Direct integration with **Snowflake Semantic Views**
+- Multiple authentication methods: PAT, key pair, OAuth
+- Connection pooling, role/warehouse switching
+- **Cortex AI** — natural language data explanations powered by Snowflake Cortex COMPLETE
 
-### 📊 Semantic Views
-- Direct integration with Snowflake Semantic Views
-- Auto-discovery of dimensions and measures
-- Calculated fields with SQL expressions
-- Filter and sort capabilities
+### Enterprise Security
+- **Multi-factor authentication** — TOTP (Google Authenticator, Authy) and FIDO2 Passkeys (WebAuthn)
+- **SAML 2.0 SSO** — Okta, Microsoft Entra ID, or any SAML IdP
+- **SCIM 2.0** — automated user and group provisioning
+- **RBAC** — Owner, Admin, Editor, Viewer roles with group-based dashboard access
+- AES-256-GCM credential encryption at rest with key rotation
+- Rate limiting, account lockout, audit logging, Helmet security headers
+- Single-session enforcement with Redis-backed distributed sessions
 
-### 📈 Drag & Drop Dashboards
-- 25+ visualization types including:
-  - **Charts** - Bar, Line, Area, Pie, Donut, Scatter, Bubble
-  - **Advanced** - Heatmap, Treemap, Sunburst, Sankey, Radar
-  - **Statistical** - Histogram, Boxplot, Violin
-  - **Geographic** - Choropleth, Bubble Map
-  - **Data** - Tables, Pivot Tables, Metric Cards
-- Adaptive and fixed layout modes
-- Multi-tab dashboards
-- Real-time data refresh
-- YAML-based configuration
+### Metadata Backend
+- **PostgreSQL** (recommended) or **Snowflake** as the metadata store
+- Full migration scripts for both backends
 
-### 🤖 Cortex AI Integration
-- "Explain" feature for AI-powered data insights
-- Natural language data interpretation
-- Powered by Snowflake Cortex COMPLETE
+---
 
-### 🎨 Modern UI
-- Light and dark themes with smooth transitions
-- Responsive design
-- Beautiful data visualizations with D3.js
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      React Frontend                          │
-│  ┌─────────┐  ┌──────────────┐  ┌────────────────────────┐  │
-│  │  Auth   │  │    User      │  │   Dashboard Builder    │  │
-│  │  Login  │  │  Settings    │  │  (Drag & Drop Widgets) │  │
-│  └─────────┘  └──────────────┘  └────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                     REST API + JWT
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                    Express API Server                        │
-│  ┌────────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │    Auth    │  │  Users   │  │ Semantic │  │Dashboard │  │
-│  │   Routes   │  │  Routes  │  │  Routes  │  │  Routes  │  │
-│  └────────────┘  └──────────┘  └──────────┘  └──────────┘  │
-└─────────────────────────────────────────────────────────────┘
-              │                              │
-     PostgreSQL (Metadata)           Snowflake SDK
-              │                              │
-┌─────────────────────────┐    ┌─────────────────────────────┐
-│   PostgreSQL Database   │    │     Snowflake Data Cloud    │
-│  - Users & Groups       │    │  - Semantic Views           │
-│  - Connections          │    │  - Data Queries             │
-│  - Dashboard Configs    │    │  - Cortex AI                │
-└─────────────────────────┘    └─────────────────────────────┘
-```
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
+
 - Node.js 18+
 - PostgreSQL 14+
 - A Snowflake account with Semantic Views
 
-### Installation
+### Install
 
-1. **Clone and install dependencies:**
 ```bash
-git clone <repository>
-cd simply-analytics
+git clone https://github.com/jfarinacci/Simply-Analytics.git
+cd Simply-Analytics
 npm run install:all
 ```
 
-2. **Set up PostgreSQL:**
+### Configure
 
-Create a PostgreSQL database:
-```sql
-CREATE DATABASE simply_analytics;
-```
+Create `server/.env`:
 
-3. **Configure environment variables:**
-
-Create a `.env` file in the `server` directory:
 ```env
-# Server
 NODE_ENV=development
 PORT=3001
-VERBOSE_LOGS=false
 
 # PostgreSQL
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_USER=your_postgres_user
-POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
 POSTGRES_DATABASE=simply_analytics
 
-# Authentication
-JWT_SECRET=your_jwt_secret_here_min_32_chars
+# Auth (generate strong random values)
+JWT_SECRET=your-secret-min-32-characters-long
 JWT_EXPIRY=8h
-SESSION_TIMEOUT_MINUTES=480
-CREDENTIALS_ENCRYPTION_KEY=your_encryption_key_here_32_chars
+CREDENTIALS_ENCRYPTION_KEY=your-encryption-key-32-chars
 
-# CORS (adjust for your frontend URL)
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+# CORS
+CORS_ORIGINS=http://localhost:5173
 ```
 
-4. **Run database migrations:**
+### Migrate
+
 ```bash
 cd server
 node src/db/migrate-postgres.js
 ```
 
-This creates:
-- Users table with default admin (username: `admin`, password: `admin123`)
-- User groups table
-- Snowflake connections table
-- Dashboards table
-- Dashboard access table
+This creates all tables and a default admin user (`admin` / `admin123`).
 
-5. **Start the development servers:**
+### Run
+
 ```bash
 npm run dev
 ```
 
-This starts:
-- API server at `http://localhost:3001`
-- Frontend at `http://localhost:5173`
+- **API** → http://localhost:3001
+- **Frontend** → http://localhost:5173
 
-## Usage
+> Change the default admin password immediately after first login.
 
-### 1. Sign In
-Use the default admin credentials or create new users:
-- Username: `admin`
-- Password: `admin123`
+---
 
-**Important:** Change the admin password after first login!
+## Docker Deployment
 
-### 2. Configure Snowflake Connections
-Go to Settings and add your Snowflake connection:
-- Connection name
-- Account identifier (e.g., `abc12345.us-east-1`)
-- Username
-- Authentication: PAT Token or Key Pair
-- Default warehouse and role
+```bash
+docker compose up -d
+```
 
-### 3. Create Dashboards
-- Click "Create Dashboard"
-- Select a Snowflake connection
-- Choose role and warehouse
-- Select semantic views to use
-- Start building with the Widget Editor
+This starts four services:
 
-### 4. Build Widgets
-- Drag dimensions and measures to chart axes
-- Choose from 25+ visualization types
-- Add filters and sorts
-- Create calculated fields
-- Use Cortex AI to explain your data
+| Service | Port | Description |
+|---------|------|-------------|
+| `postgres` | 5432 | Metadata storage |
+| `redis` | 6379 | Session storage |
+| `api` | 3001 | Express API server |
+| `client` | 80 | Nginx serving the React SPA + API proxy |
 
-### 5. Manage Access
-- Set dashboard visibility (Private/Public)
-- Assign user groups for private dashboards
-- Control access levels (View, Edit, Admin)
+---
 
-## Environment Variables
+## Configuration
+
+### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NODE_ENV` | Environment mode | `development` |
-| `PORT` | Server port | `3001` |
-| `VERBOSE_LOGS` | Enable debug logging | `false` |
+| `NODE_ENV` | `development` or `production` | `development` |
+| `PORT` | API server port | `3001` |
 | `POSTGRES_HOST` | PostgreSQL host | `localhost` |
 | `POSTGRES_PORT` | PostgreSQL port | `5432` |
-| `POSTGRES_USER` | PostgreSQL username | - |
-| `POSTGRES_PASSWORD` | PostgreSQL password | - |
-| `POSTGRES_DATABASE` | PostgreSQL database name | - |
-| `JWT_SECRET` | JWT signing secret (min 32 chars) | - |
-| `JWT_EXPIRY` | JWT token expiry | `8h` |
-| `CREDENTIALS_ENCRYPTION_KEY` | AES encryption key for credentials | - |
-| `CORS_ORIGINS` | Allowed CORS origins | - |
+| `POSTGRES_USER` | PostgreSQL username | — |
+| `POSTGRES_PASSWORD` | PostgreSQL password | — |
+| `POSTGRES_DATABASE` | PostgreSQL database | — |
+| `JWT_SECRET` | JWT signing secret (min 32 chars) | — |
+| `JWT_EXPIRY` | Token expiry duration | `8h` |
+| `CREDENTIALS_ENCRYPTION_KEY` | AES-256 key for credential encryption | — |
+| `CORS_ORIGINS` | Comma-separated allowed origins | — |
+| `METADATA_BACKEND` | `postgres` or `snowflake` | `postgres` |
 
-## Tech Stack
+### SSO (Optional)
 
-### Frontend
-- **React 18** - UI framework
-- **Vite** - Build tool
-- **React Router** - Client-side routing
-- **Zustand** - State management
-- **@dnd-kit** - Drag and drop
-- **D3.js** - Data visualizations
-- **React Icons** - Icon library
+```env
+SSO_ENABLED=true
+SAML_ENTRY_POINT=https://your-idp.example.com/sso/saml
+SAML_ISSUER=simply-analytics
+SAML_CALLBACK_URL=https://your-app.example.com/api/saml/callback
+SAML_CERT=<Base64 IdP signing certificate>
+```
 
-### Backend
-- **Express** - API framework
-- **PostgreSQL** - Metadata storage
-- **snowflake-sdk** - Snowflake connector
-- **jsonwebtoken** - JWT authentication
-- **bcryptjs** - Password hashing
-- **crypto-js** - Credential encryption
-- **uuid** - ID generation
-- **js-yaml** - YAML parsing
+### SCIM Provisioning (Optional)
 
-## Project Structure
+```env
+SCIM_ENABLED=true
+SCIM_BEARER_TOKEN=your-scim-token
+```
+
+---
+
+## Architecture
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   React 18 + Vite                      │
+│  Dashboard Builder · Widget Editor · Admin Console     │
+│  D3.js · ECharts · AG Grid · GridStack · @dnd-kit     │
+└──────────────────────────┬─────────────────────────────┘
+                           │ REST + JWT
+┌──────────────────────────┴─────────────────────────────┐
+│                Express API Server                      │
+│  Auth · SAML SSO · SCIM · MFA · Dashboard · Query     │
+│  Helmet · Rate Limiting · Audit Log                    │
+└───────────┬──────────────────────────────┬─────────────┘
+            │                              │
+   PostgreSQL / Redis               Snowflake SDK
+            │                              │
+┌───────────┴───────────┐   ┌──────────────┴─────────────┐
+│  Metadata + Sessions  │   │   Snowflake Data Cloud     │
+│  Users · Dashboards   │   │   Semantic Views · Cortex  │
+│  Connections · Groups │   │   Queries · AI Insights    │
+└───────────────────────┘   └────────────────────────────┘
+```
+
+### Project Structure
 
 ```
 simply-analytics/
-├── client/                 # React frontend
+├── client/                  # React SPA
 │   ├── src/
-│   │   ├── api/            # API client
-│   │   ├── components/     # UI components
-│   │   ├── store/          # Zustand state
-│   │   ├── styles/         # CSS files
-│   │   ├── utils/          # Utilities
-│   │   ├── App.jsx         # Main app with routing
-│   │   └── main.jsx        # Entry point
-│   └── package.json
-├── server/                 # Express backend
+│   │   ├── api/             # API client
+│   │   ├── components/      # UI components
+│   │   │   ├── charts/      # 25+ visualization types
+│   │   │   └── widget-editor/ # Drag-and-drop editor
+│   │   ├── store/           # Zustand state management
+│   │   └── styles/          # Global styles + themes
+│   ├── Dockerfile
+│   └── nginx.conf
+├── server/                  # Express API
 │   ├── src/
-│   │   ├── db/             # Database connectors
-│   │   │   ├── postgres.js # PostgreSQL client
-│   │   │   ├── snowflake.js# Snowflake SDK
-│   │   │   └── schema.sql  # Database schema
-│   │   ├── middleware/     # Auth middleware
-│   │   ├── routes/         # API routes
-│   │   ├── services/       # Business logic
-│   │   └── index.js        # Server entry
-│   ├── env.example         # Environment template
-│   └── package.json
-└── package.json            # Root workspace
+│   │   ├── db/              # PostgreSQL + Snowflake backends
+│   │   ├── middleware/      # Auth, rate limiting
+│   │   ├── routes/          # API endpoints
+│   │   ├── services/        # Business logic
+│   │   └── scripts/         # Key rotation utilities
+│   └── Dockerfile
+├── docker-compose.yml
+└── package.json             # Workspace root
 ```
+
+### Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React 18, Vite, Zustand, D3.js, ECharts, AG Grid, GridStack, @dnd-kit |
+| **Backend** | Express, PostgreSQL, Snowflake SDK, Redis |
+| **Auth** | JWT, bcrypt, SAML 2.0, SCIM 2.0, TOTP, WebAuthn/FIDO2 |
+| **Security** | AES-256-GCM, Helmet, express-rate-limit |
+| **Infra** | Docker, Nginx |
+
+---
 
 ## User Roles
 
-| Role | Permissions |
-|------|-------------|
-| **Owner** | Full access, transfer ownership, manage all users |
-| **Admin** | Manage users and groups, create dashboards |
-| **Editor** | Create and edit dashboards |
-| **Viewer** | View published dashboards only |
+| Role | Dashboards | Connections | Users | Groups |
+|------|-----------|-------------|-------|--------|
+| **Owner** | Full access | Manage | Manage all | Manage |
+| **Admin** | Create & edit | Manage | Manage | Manage |
+| **Editor** | Create & edit | View | — | — |
+| **Viewer** | View only | — | — | — |
 
-## Security
+---
 
-- Passwords hashed with bcrypt
-- Snowflake credentials encrypted with AES-256
-- JWT tokens with 8-hour expiry
-- Single-session enforcement
-- Session invalidation on server restart
-- Network policy error handling
+## API Routes
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/auth/login` | Authenticate (password, PAT, keypair) |
+| `GET /api/auth/roles` | List available Snowflake roles |
+| `GET/POST /api/2fa/*` | TOTP and Passkey management |
+| `GET /api/saml/login` | Initiate SAML SSO |
+| `POST /api/saml/callback` | SAML assertion callback |
+| `/scim/v2/Users`, `/scim/v2/Groups` | SCIM 2.0 provisioning |
+| `GET/POST/PUT/DELETE /api/dashboard/*` | Dashboard CRUD |
+| `POST /api/query/execute` | Execute Snowflake queries |
+| `GET /api/semantic/*` | Semantic view discovery |
+| `GET/POST/PUT/DELETE /api/users/*` | User management |
+| `GET/POST/PUT/DELETE /api/connections/*` | Connection management |
+| `GET/POST/PUT/DELETE /api/groups/*` | Group management |
+| `GET/POST/PUT/DELETE /api/folders/*` | Folder management |
+
+---
 
 ## Troubleshooting
 
-### PostgreSQL Permission Errors
-Ensure your PostgreSQL user has permission to create tables:
+**PostgreSQL permissions:**
 ```sql
 GRANT ALL PRIVILEGES ON DATABASE simply_analytics TO your_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_user;
 ```
 
-### Port Already in Use
+**Port conflict:**
 ```bash
 lsof -ti:3001 | xargs kill -9
 ```
 
-### Snowflake Network Policy Errors
-If you see "IP not allowed" errors:
-1. Connect to VPN if required
-2. Click the "Reconnect" button in the dashboard toolbar
+**Snowflake network policy errors:**
+Ensure your IP is allowlisted or connect through VPN, then use the Reconnect button.
+
+**Encryption key rotation:**
+```bash
+cd server
+node src/scripts/rotate-encryption-key.js
+```
+
+---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please open an issue or submit a pull request.
+
+1. Fork the repository
+2. Create your branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push (`git push origin feature/my-feature`)
+5. Open a Pull Request
+
+---
 
 ## License
 
-MIT License - see [LICENSE.md](LICENSE.md) for details.
+[MIT](LICENSE.md) — Jorge Farinacci

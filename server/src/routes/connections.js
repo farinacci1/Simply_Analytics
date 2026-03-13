@@ -6,7 +6,7 @@
 
 import { Router } from 'express';
 import connectionService from '../services/connectionService.js';
-import { clearCachedConnection, closeDashboardConnection, getConnectionCacheStats, forceDestroyAllForConnection } from '../db/snowflake.js';
+import { clearCachedConnection, closeDashboardConnection, getConnectionCacheStats, forceDestroyAllForConnection } from '../db/dashboardSessionManager.js';
 
 // Verbose logging toggle
 const VERBOSE = process.env.VERBOSE_LOGS === 'true';

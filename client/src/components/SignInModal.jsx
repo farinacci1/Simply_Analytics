@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX, FiUser, FiLock, FiLoader, FiEye, FiEyeOff, FiLogIn, FiSmartphone, FiKey, FiArrowLeft, FiShield, FiAlertCircle } from 'react-icons/fi';
+import { FiX, FiUser, FiLock, FiLoader, FiEye, FiEyeOff, FiLogIn, FiSmartphone, FiKey, FiArrowLeft, FiShield, FiAlertCircle, FiExternalLink } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { twoFactorApi } from '../api/apiClient';
-import './SignInModal.css';
+import '../styles/SignInModal.css';
 
 // Helper functions for WebAuthn - browser independent
 function base64urlToArrayBuffer(base64url) {
@@ -150,6 +150,9 @@ const SignInModal = ({ isOpen, onClose }) => {
   const [totpDigits, setTotpDigits] = useState(['', '', '', '', '', '']);
   const [verifying2FA, setVerifying2FA] = useState(false);
 
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       setErrors({});
@@ -159,6 +162,11 @@ const SignInModal = ({ isOpen, onClose }) => {
       setTwoFactorData(null);
       setTotpDigits(['', '', '', '', '', '']);
       setTimeout(() => usernameInputRef.current?.focus(), 100);
+
+      fetch('/api/saml/status')
+        .then(r => r.json())
+        .then(data => setSsoEnabled(data.enabled === true))
+        .catch(() => setSsoEnabled(false));
     }
   }, [isOpen]);
 
@@ -549,6 +557,31 @@ const SignInModal = ({ isOpen, onClose }) => {
                   <span>Sign In</span>
                 )}
               </button>
+
+              {ssoEnabled && (
+                <>
+                  <div className="auth-divider">
+                    <span>or</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="auth-sso-btn"
+                    disabled={ssoLoading}
+                    onClick={() => {
+                      setSsoLoading(true);
+                      window.location.href = '/api/saml/login';
+                    }}
+                  >
+                    {ssoLoading ? (
+                      <FiLoader className="spinner" />
+                    ) : (
+                      <FiExternalLink />
+                    )}
+                    <span>Sign in with SSO</span>
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="auth-form-footer">

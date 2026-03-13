@@ -113,7 +113,7 @@ twoFactorRoutes.delete('/totp', async (req, res) => {
     
     // Verify password (import bcrypt and user query)
     const bcrypt = await import('bcryptjs');
-    const { query } = await import('../db/postgres.js');
+    const { query } = await import('../db/db.js');
     
     const userResult = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     const isValidPassword = await bcrypt.default.compare(password, userResult.rows[0].password_hash);
@@ -228,7 +228,7 @@ twoFactorRoutes.delete('/passkey/:id', async (req, res) => {
     
     // Verify password
     const bcrypt = await import('bcryptjs');
-    const { query } = await import('../db/postgres.js');
+    const { query } = await import('../db/db.js');
     
     const userResult = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     const isValidPassword = await bcrypt.default.compare(password, userResult.rows[0].password_hash);
@@ -280,7 +280,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
     const result = await twoFactorService.validateTotpCode(userId, code);
     
     // Get user details and session utilities
-    const { query } = await import('../db/postgres.js');
+    const { query } = await import('../db/db.js');
     const userResult = await query(
       'SELECT id, username, email, role, display_name, theme_preference FROM users WHERE id = $1',
       [userId]
@@ -290,7 +290,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
     // Import session management utilities
     const userService = await import('../services/userService.js');
     const { isSessionRevoked, revokeSession } = await import('./auth.js');
-    const { closeDashboardConnection } = await import('../db/snowflake.js');
+    const { closeDashboardConnection } = await import('../db/dashboardSessionManager.js');
     const { v4: uuidv4 } = await import('uuid');
     
     // Check for existing active session (single-session enforcement)
@@ -419,7 +419,7 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
     await twoFactorService.verifyPasskeyAuthentication(userId, response);
     
     // Get user details
-    const { query } = await import('../db/postgres.js');
+    const { query } = await import('../db/db.js');
     const userResult = await query(
       'SELECT id, username, email, role, display_name, theme_preference FROM users WHERE id = $1',
       [userId]
@@ -429,7 +429,7 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
     // Import session management utilities
     const userService = await import('../services/userService.js');
     const { isSessionRevoked, revokeSession } = await import('./auth.js');
-    const { closeDashboardConnection } = await import('../db/snowflake.js');
+    const { closeDashboardConnection } = await import('../db/dashboardSessionManager.js');
     const { v4: uuidv4 } = await import('uuid');
     
     // Check for existing active session (single-session enforcement)

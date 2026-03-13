@@ -34,9 +34,9 @@ import {
 } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { groupApi, sfConnectionApi, folderApi } from '../api/apiClient';
-import './DashboardSettings.css';
+import '../styles/DashboardSettingsModal.css';
 
-const DashboardSettings = ({ dashboard, isOpen, onClose, onSave }) => {
+const DashboardSettingsModal = ({ dashboard, isOpen, onClose, onSave }) => {
   const { 
     currentRole,
     currentDashboard,
@@ -2073,4 +2073,4 @@ const DashboardSettings = ({ dashboard, isOpen, onClose, onSave }) => {
   );
 };
 
-export default DashboardSettings;
+export default DashboardSettingsModal;

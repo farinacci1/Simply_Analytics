@@ -2,8 +2,6 @@
 
 .users-management {
   padding: 32px 40px;
-  max-width: 1200px;
-  margin: 0 auto;
   background: var(--bg-primary);
   min-height: 100%;
 }
@@ -161,16 +159,19 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px;
+  padding: 120px 80px;
   color: var(--text-muted);
   gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 12px;
 }
 
 /* Users Table - Clean Frontegg-style */
 .users-table-wrapper {
   background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   overflow: visible;
 }
 
@@ -230,9 +231,10 @@
 }
 
 /* Column Styling */
-.col-name { min-width: 280px; }
-.col-role { width: 140px; }
-.col-active { width: 120px; color: var(--text-secondary); }
+.col-name { width: 40%; min-width: 220px; }
+.col-role { width: 15%; }
+.col-status { width: 15%; }
+.col-active { width: 15%; color: var(--text-secondary); }
 .col-settings { width: 60px; text-align: right; position: relative; }
 
 /* User Cell */
@@ -437,42 +439,11 @@
 
 .modal {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
-  overflow: hidden;
   box-shadow: var(--shadow-xl);
-  display: flex;
-  flex-direction: column;
-}
-
-/* Form inside modal should also use flexbox */
-.modal > form {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-primary);
-  flex-shrink: 0;
-}
-
-.modal-header h2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-size: 18px;
-  color: var(--text-primary);
 }
 
 .close-btn {
@@ -486,22 +457,6 @@
 
 .close-btn:hover {
   color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 24px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-primary);
-  flex-shrink: 0;
 }
 
 /* Form */
@@ -604,9 +559,14 @@
   gap: 16px;
 }
 
+.content-header .search-box {
+  flex: 1;
+  max-width: 400px;
+}
+
 /* Groups Tab */
 .groups-tab {
-  min-height: 500px;
+  min-height: calc(100vh - 240px);
 }
 
 .access-notice {
@@ -622,9 +582,9 @@
 
 .groups-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 1fr 2fr;
   gap: 24px;
-  min-height: 500px;
+  min-height: calc(100vh - 280px);
 }
 
 /* Groups List Panel */
@@ -755,10 +715,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
   color: var(--text-muted);
   text-align: center;
   gap: 12px;
+  flex: 1;
 }
 
 .empty-groups p {
@@ -773,6 +734,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .no-selection {
@@ -783,6 +745,9 @@
   flex: 1;
   color: var(--text-muted);
   gap: 12px;
+  border: 1px dashed var(--border-primary);
+  border-radius: 12px;
+  background: transparent;
 }
 
 .empty-members {
@@ -915,6 +880,7 @@
 @media (max-width: 900px) {
   .groups-layout {
     grid-template-columns: 1fr;
+    min-height: unset;
   }
   
   .groups-list-panel {

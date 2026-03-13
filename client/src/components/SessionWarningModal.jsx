@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { FiClock, FiX } from 'react-icons/fi';
 import { keepSessionAlive } from '../api/apiClient';
-import './SessionWarning.css';
+import '../styles/SessionWarningModal.css';
 
-const SessionWarning = ({ timeRemaining, onKeepAlive, onSignOut }) => {
+const SessionWarningModal = ({ timeRemaining, onKeepAlive, onSignOut }) => {
   const [countdown, setCountdown] = useState(Math.floor(timeRemaining / 1000));
 
   useEffect(() => {
@@ -64,4 +64,4 @@ const SessionWarning = ({ timeRemaining, onKeepAlive, onSignOut }) => {
   );
 };
 
-export default SessionWarning;
+export default SessionWarningModal;

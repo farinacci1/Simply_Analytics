@@ -15,7 +15,7 @@ import {
   FiCode,
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi2';
-import './GettingStarted.css';
+import '../styles/GettingStarted.css';
 
 const GettingStarted = ({ onSignIn }) => {
 

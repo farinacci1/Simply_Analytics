@@ -8,7 +8,7 @@
 
 import { Router } from 'express';
 import dashboardServicePg from '../services/dashboardServicePg.js';
-import { query } from '../db/postgres.js';
+import { query } from '../db/db.js';
 import yaml from 'js-yaml';
 
 // Verbose logging toggle

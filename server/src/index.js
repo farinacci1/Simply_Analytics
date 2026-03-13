@@ -3,8 +3,8 @@
  * 
  * Production-ready Express server for the Simply Analytics platform.
  * 
- * Uses PostgreSQL for user management, connections, and dashboard storage.
- * Snowflake is used for semantic view queries and data analysis.
+ * Uses Snowflake for all data storage including user management,
+ * connections, dashboard storage, and data analysis queries.
  */
 
 import express from 'express';
@@ -26,12 +26,15 @@ import { userRoutes } from './routes/users.js';
 import { connectionRoutes } from './routes/connections.js';
 import { groupRoutes } from './routes/groups.js';
 import folderRoutes from './routes/folders.js';
+import samlRoutes from './routes/saml.js';
+import scimRoutes from './routes/scim.js';
 
 // Middleware
 import { authMiddleware, optionalAuthMiddleware, getActiveSessionCount } from './middleware/auth.js';
 
 // Database
-import { testConnection as testPostgres } from './db/postgres.js';
+import { init as initDb, test as testDb, metadataBackend } from './db/db.js';
+import { validateKeyConfigured } from './utils/encryption.js';
 import userService from './services/userService.js';
 
 const app = express();
@@ -83,6 +86,12 @@ app.use('/api/auth', optionalAuthMiddleware, authRoutes);
 // 2FA routes - some require auth, some are for login flow
 app.use('/api/2fa', optionalAuthMiddleware, twoFactorRoutes);
 
+// SSO SAML routes (no auth middleware - IdP handles authentication)
+app.use('/api/saml', samlRoutes);
+
+// SCIM 2.0 provisioning (bearer token auth handled by scim middleware)
+app.use('/scim/v2', scimRoutes);
+
 // ============================================
 // Protected routes (require authentication)
 // ============================================
@@ -92,7 +101,7 @@ app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/semantic', authMiddleware, semanticRoutes);
 app.use('/api/query', authMiddleware, queryRoutes);
 
-// PostgreSQL-based routes
+// App metadata routes
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/connections', authMiddleware, connectionRoutes);
 app.use('/api/groups', authMiddleware, groupRoutes);
@@ -112,24 +121,33 @@ app.use((err, req, res, next) => {
 // Initialize database connections and start server
 async function startServer() {
   try {
-    // Test PostgreSQL connection
-    console.log('Testing PostgreSQL connection...');
-    const pgConnected = await testPostgres();
-    if (pgConnected) {
-      console.log('✅ PostgreSQL connected');
-      
-      // Clear all active sessions from database (server restart invalidates all sessions)
-      // This ensures JWTs from before the restart are properly rejected
-      try {
-        await userService.clearAllActiveSessions();
-      } catch (sessionErr) {
-        console.warn('⚠️ Could not clear active sessions:', sessionErr.message);
+    validateKeyConfigured();
+  } catch (err) {
+    console.error('FATAL:', err.message);
+    process.exit(1);
+  }
+
+  try {
+    console.log(`Initializing ${metadataBackend} metadata backend...`);
+    try {
+      await initDb();
+      const dbConnected = await testDb();
+      if (dbConnected) {
+        console.log(`${metadataBackend} metadata connection established`);
+        try {
+          await userService.clearAllActiveSessions();
+        } catch (sessionErr) {
+          console.warn('Could not clear active sessions:', sessionErr.message);
+        }
+      } else {
+        console.warn(`${metadataBackend} connection test failed - some features may not work`);
       }
-    } else {
-      console.warn('⚠️ PostgreSQL connection failed - some features may not work');
+    } catch (dbErr) {
+      console.warn(`${metadataBackend} connection failed:`, dbErr.message);
+      console.warn('App will start but metadata features require a database');
     }
   } catch (error) {
-    console.warn('⚠️ PostgreSQL initialization error:', error.message);
+    console.warn('Initialization error:', error.message);
   }
 
   const server = app.listen(PORT, () => {

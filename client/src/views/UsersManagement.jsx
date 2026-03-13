@@ -14,9 +14,9 @@ import {
 } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { userApi, groupApi } from '../api/apiClient';
-import { useToast } from './Toast';
-import ConfirmDeleteDialog from './ConfirmDeleteDialog';
-import './UsersManagement.css';
+import { useToast } from '../components/Toast';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import '../styles/UsersManagement.css';
 
 const ROLE_LABELS = {
   owner: 'Owner',
@@ -1372,7 +1372,7 @@ const UsersManagement = () => {
 
       {/* Delete Group Confirmation */}
       {groupToDelete && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           itemName={groupToDelete.name}
           itemType="group"
           onConfirm={handleDeleteGroup}
@@ -1382,7 +1382,7 @@ const UsersManagement = () => {
 
       {/* Delete User Confirmation */}
       {userToDelete && !showTransferDashboardsModal && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           itemName={userToDelete.display_name || userToDelete.username}
           itemType="user"
           onConfirm={handleDeleteUser}

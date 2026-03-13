@@ -443,6 +443,30 @@ async function runMigration() {
       console.log('   ⚠️  Could not create folder name unique index:', migrateErr.message);
     }
 
+    // SSO / SCIM columns
+    console.log('\n🔑 Setting up SSO / SCIM columns...');
+
+    try {
+      const authProviderCheck = await pool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'auth_provider'
+      `);
+
+      if (authProviderCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'local'`);
+        await pool.query(`ALTER TABLE users ADD COLUMN external_id VARCHAR(255)`);
+        await pool.query(`ALTER TABLE users ADD COLUMN scim_managed BOOLEAN DEFAULT false`);
+        await pool.query(`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_external_id ON users(external_id) WHERE external_id IS NOT NULL`);
+        console.log("   ✅ Added SSO/SCIM columns to users table");
+      } else {
+        console.log("   ✓ SSO/SCIM columns already exist");
+      }
+    } catch (migrateErr) {
+      console.log('   ⚠️  Could not add SSO/SCIM columns:', migrateErr.message);
+    }
+
     // Create or update admin user with properly hashed password
     console.log('\n👤 Setting up admin user...');
     const adminPassword = 'admin123';

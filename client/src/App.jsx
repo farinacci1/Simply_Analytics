@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useSearchParams } from 'react-router-dom';
 import { useAppStore } from './store/appStore';
-import Sidebar from './components/Sidebar';
-import SemanticModels from './components/SemanticModels';
-import DashboardBrowser from './components/DashboardBrowser';
-import DashboardView from './components/DashboardView';
-import GettingStarted from './components/GettingStarted';
-import UsersManagement from './components/UsersManagement';
-import UserSettings from './components/UserSettings';
+import SideNav from './components/SideNav';
+
+import DashboardBrowser from './views/DashboardBrowser';
+import DashboardView from './views/DashboardView';
+import GettingStarted from './views/GettingStarted';
+import UsersManagement from './views/UsersManagement';
+import UserSettings from './views/UserSettings';
 import SignInModal from './components/SignInModal';
-import SessionWarning from './components/SessionWarning';
-import { startSessionMonitoring, stopSessionMonitoring } from './api/apiClient';
+import SessionWarningModal from './components/SessionWarningModal';
+import { startSessionMonitoring, stopSessionMonitoring, persistSession } from './api/apiClient';
 import './styles/App.css';
 
 // Hook to detect if we're in dashboard focus mode (viewing a specific dashboard)
@@ -87,14 +87,32 @@ function App() {
   const isDashboardFocusMode = useDashboardFocusMode();
   
   const [showSignIn, setShowSignIn] = useState(false);
-  const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const [showSessionWarningModal, setShowSessionWarningModal] = useState(false);
   const [sessionTimeRemaining, setSessionTimeRemaining] = useState(0);
   const [sessionEndReason, setSessionEndReason] = useState(null);
 
   // Initialize app and theme on mount
   useEffect(() => {
+    // Handle SSO callback token from URL
+    const params = new URLSearchParams(window.location.search);
+    const ssoToken = params.get('token');
+    if (ssoToken) {
+      try {
+        const payload = JSON.parse(atob(ssoToken.split('.')[1]));
+        const user = {
+          id: payload.userId,
+          username: payload.username,
+          email: payload.email,
+          role: payload.role,
+        };
+        persistSession(user, ssoToken);
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (err) {
+        console.error('Failed to process SSO token:', err);
+      }
+    }
+
     initializeApp();
-    // Apply saved theme on load (default to light)
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
   }, []);
@@ -114,11 +132,11 @@ function App() {
       startSessionMonitoring(
         (timeRemaining) => {
           setSessionTimeRemaining(timeRemaining);
-          setShowSessionWarning(true);
+          setShowSessionWarningModal(true);
         },
         (reason) => {
           // Session expired or server restarted
-          setShowSessionWarning(false);
+          setShowSessionWarningModal(false);
           setSessionEndReason(reason || 'expired');
           signOut();
         }
@@ -127,18 +145,18 @@ function App() {
       setSessionEndReason(null);
     } else {
       stopSessionMonitoring();
-      setShowSessionWarning(false);
+      setShowSessionWarningModal(false);
     }
 
     return () => stopSessionMonitoring();
   }, [isAuthenticated]);
 
   const handleKeepAlive = () => {
-    setShowSessionWarning(false);
+    setShowSessionWarningModal(false);
   };
 
   const handleSessionSignOut = () => {
-    setShowSessionWarning(false);
+    setShowSessionWarningModal(false);
     signOut();
   };
 
@@ -170,7 +188,7 @@ function App() {
 
   return (
     <div className={`app ${isDashboardFocusMode ? 'dashboard-focus-mode' : ''}`}>
-      {!isDashboardFocusMode && <Sidebar onSignIn={() => setShowSignIn(true)} />}
+      {!isDashboardFocusMode && <SideNav onSignIn={() => setShowSignIn(true)} />}
       <main className={`main-content ${isDashboardFocusMode ? 'full-width' : ''}`}>
         <Routes>
           <Route path="/" element={<HomeRoute />} />
@@ -235,8 +253,8 @@ function App() {
       />
 
       {/* Session Warning */}
-      {showSessionWarning && (
-        <SessionWarning
+      {showSessionWarningModal && (
+        <SessionWarningModal
           timeRemaining={sessionTimeRemaining}
           onKeepAlive={handleKeepAlive}
           onSignOut={handleSessionSignOut}

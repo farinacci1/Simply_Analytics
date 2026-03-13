@@ -17,7 +17,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getCachedDashboardConnection } from '../services/connectionService.js';
-import { executeQuery } from '../db/snowflake.js';
+import { executeQuery } from '../db/dashboardSessionManager.js';
 import {
   buildQueryDirect,
   isDatePartField,
@@ -26,7 +26,7 @@ import {
   isAggregateExpression,
   extractFieldReferences,
   DEFAULT_QUERY_LIMIT,
-} from '../../../shared/queryBuilder.js';
+} from '../utils/queryBuilder.js';
 
 // Debug logging toggle - set SEMANTIC_DEBUG=true for verbose logs
 const DEBUG = process.env.SEMANTIC_DEBUG === 'true' || process.env.VERBOSE_LOGS === 'true';

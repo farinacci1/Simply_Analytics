@@ -16,9 +16,12 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username VARCHAR(255) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255),
   display_name VARCHAR(255),
   role user_role NOT NULL DEFAULT 'viewer',
+  auth_provider VARCHAR(20) NOT NULL DEFAULT 'local',
+  external_id VARCHAR(255),
+  scim_managed BOOLEAN DEFAULT false,
   is_active BOOLEAN DEFAULT true,
   theme_preference VARCHAR(20) DEFAULT 'light', -- 'light' or 'dark'
   active_session_id VARCHAR(255), -- Current active session (for single-session enforcement)

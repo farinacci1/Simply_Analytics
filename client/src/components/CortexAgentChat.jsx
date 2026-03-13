@@ -3,7 +3,7 @@ import { FiX, FiSend, FiLoader, FiAlertCircle, FiTrash2 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi2';
 import { BsStars } from 'react-icons/bs';
 import { sfConnectionApi } from '../api/apiClient';
-import './CortexAgentChat.css';
+import '../styles/CortexAgentChat.css';
 
 const CortexAgentChat = ({ connectionId, cortexAgents = [], role, onClose }) => {
   const [isOpen, setIsOpen] = useState(false);

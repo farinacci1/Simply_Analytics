@@ -15,9 +15,9 @@ import {
 } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { sfConnectionApi as connectionApi, userApi, dashboardApi } from '../api/apiClient';
-import ConfirmDeleteDialog from './ConfirmDeleteDialog';
-import TwoFactorSettings from './TwoFactorSettings';
-import './UserSettings.css';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import TwoFactorSettingsModal from '../components/TwoFactorSettingsModal';
+import '../styles/UserSettings.css';
 
 const UserSettings = () => {
   const { currentUser, currentRole } = useAppStore();
@@ -327,10 +327,8 @@ const UserSettings = () => {
 
   return (
     <div className="user-settings">
-      {/* Header */}
       <header className="settings-header">
         <div className="header-content">
-          <FiSettings className="header-icon" />
           <div>
             <h1>Settings</h1>
             <p>Manage your account, connections, and security</p>
@@ -339,8 +337,13 @@ const UserSettings = () => {
       </header>
 
       <div className="settings-content">
-        {/* Profile Section */}
         <section className="settings-section">
+          <div className="section-header">
+            <div>
+              <h2><FiUser /> Profile</h2>
+              <p>Your account information and credentials</p>
+            </div>
+          </div>
           <div className="section-card profile-card">
             <div className="profile-row">
               <div className="profile-avatar">
@@ -475,18 +478,16 @@ const UserSettings = () => {
           </div>
         </section>
 
-        {/* Multi-Factor Authentication Section */}
         <section className="settings-section">
-          <TwoFactorSettings />
+          <TwoFactorSettingsModal />
         </section>
 
-        {/* Connections Section - Only for admins and owners */}
         {canManageConnections && (
         <section className="settings-section">
           <div className="section-header">
             <div>
               <h2><FiDatabase /> Snowflake Connections</h2>
-              <p>Configure your data warehouse connections</p>
+              <p>Manage your data warehouse connections for dashboards</p>
             </div>
             {canManageConnections && (
               <button className="add-btn" onClick={() => openConnectionModal()}>
@@ -594,7 +595,7 @@ const UserSettings = () => {
 
       {/* Delete Connection Confirmation */}
       {canManageConnections && connectionToDelete && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           itemName={connectionToDelete.name}
           itemType="connection"
           onConfirm={handleDeleteConnection}

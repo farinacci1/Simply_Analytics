@@ -16,7 +16,7 @@ import {
   FiMoon,
 } from 'react-icons/fi';
 import SimplyLogo from '../assets/Simply_Logo.png';
-import './Sidebar.css';
+import '../styles/SideNav.css';
 
 const MIN_WIDTH = 60;
 const MAX_WIDTH = 280;
@@ -32,7 +32,7 @@ const viewToRoute = {
   models: '/models',
 };
 
-const Sidebar = ({ onSignIn }) => {
+const SideNav = ({ onSignIn }) => {
   const { 
     activeView, 
     currentUser,
@@ -285,4 +285,4 @@ const Sidebar = ({ onSignIn }) => {
   );
 };
 
-export default Sidebar;
+export default SideNav;

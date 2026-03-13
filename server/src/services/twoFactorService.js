@@ -12,7 +12,8 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
-import { query } from '../db/postgres.js';
+import { query, jsonSet, jsonDelete, jsonConcat, parseJson, now } from '../db/db.js';
+import { encrypt, decrypt } from '../utils/encryption.js';
 import crypto from 'crypto';
 
 // App configuration for WebAuthn
@@ -20,37 +21,9 @@ const RP_NAME = process.env.APP_NAME || 'Simply Analytics';
 const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 const RP_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
 
-// Encryption key for TOTP secrets (use environment variable in production)
-const ENCRYPTION_KEY = process.env.TOTP_ENCRYPTION_KEY || 'default-encryption-key-change-me!';
-
 // Configure authenticator with time window for clock drift
 // Window of 2 means it accepts codes from 60 seconds in the past to 60 seconds in the future
 authenticator.options = { window: 2 };
-
-/**
- * Encrypt a string using AES-256
- */
-function encrypt(text) {
-  const iv = crypto.randomBytes(16);
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
-}
-
-/**
- * Decrypt a string using AES-256
- */
-function decrypt(encryptedText) {
-  const parts = encryptedText.split(':');
-  const iv = Buffer.from(parts[0], 'hex');
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  let decrypted = decipher.update(parts[1], 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
 
 // ============================================
 // TOTP Functions
@@ -134,8 +107,8 @@ export async function verifyAndEnableTotp(userId, code) {
   
   // Store backup codes in preferences
   await query(
-    `UPDATE users SET preferences = preferences || $1::jsonb WHERE id = $2`,
-    [JSON.stringify({ backupCodes: hashedBackupCodes }), userId]
+    `UPDATE users SET preferences = ${jsonSet('preferences', 'backupCodes', '$1')} WHERE id = $2`,
+    [JSON.stringify(hashedBackupCodes), userId]
   );
   
   return {
@@ -187,8 +160,8 @@ export async function validateTotpCode(userId, code) {
     // Mark backup code as used
     backupCodes[backupIndex].used = true;
     await query(
-      `UPDATE users SET preferences = preferences || $1::jsonb WHERE id = $2`,
-      [JSON.stringify({ backupCodes }), userId]
+      `UPDATE users SET preferences = ${jsonSet('preferences', 'backupCodes', '$1')} WHERE id = $2`,
+      [JSON.stringify(backupCodes), userId]
     );
     
     return { success: true, method: 'backup_code', remainingBackupCodes: backupCodes.filter(bc => !bc.used).length };
@@ -208,7 +181,7 @@ export async function disableTotp(userId) {
   
   // Remove backup codes
   await query(
-    `UPDATE users SET preferences = preferences - 'backupCodes' WHERE id = $1`,
+    `UPDATE users SET preferences = ${jsonDelete('preferences', 'backupCodes')} WHERE id = $1`,
     [userId]
   );
   
@@ -359,7 +332,7 @@ export async function verifyPasskeyRegistration(userId, response, credentialName
   // Add to user's credentials
   await query(
     `UPDATE users 
-     SET passkey_credentials = passkey_credentials || $1::jsonb,
+     SET passkey_credentials = ${jsonConcat('passkey_credentials', '$1')},
          passkey_enabled = true
      WHERE id = $2`,
     [JSON.stringify([newCredential]), userId]
@@ -481,7 +454,7 @@ export async function verifyPasskeyAuthentication(userId, response) {
   );
   
   await query(
-    'UPDATE users SET passkey_credentials = $1::jsonb WHERE id = $2',
+    `UPDATE users SET passkey_credentials = ${parseJson('$1')} WHERE id = $2`,
     [JSON.stringify(updatedCredentials), userId]
   );
   
@@ -505,7 +478,7 @@ export async function removePasskey(userId, credentialId) {
   
   await query(
     `UPDATE users 
-     SET passkey_credentials = $1::jsonb,
+     SET passkey_credentials = ${parseJson('$1')},
          passkey_enabled = $2
      WHERE id = $3`,
     [JSON.stringify(updatedCredentials), updatedCredentials.length > 0, userId]
@@ -543,17 +516,18 @@ async function storeChallenge(userId, challenge, type) {
   // Store new challenge with 5-minute expiry
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   
+  const challengeId = crypto.randomUUID();
   await query(
-    `INSERT INTO webauthn_challenges (user_id, challenge, type, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, challenge, type, expiresAt]
+    `INSERT INTO webauthn_challenges (id, user_id, challenge, type, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [challengeId, userId, challenge, type, expiresAt.toISOString()]
   );
 }
 
 async function getChallenge(userId, type) {
   const result = await query(
     `SELECT challenge FROM webauthn_challenges 
-     WHERE user_id = $1 AND type = $2 AND expires_at > NOW()
+     WHERE user_id = $1 AND type = $2 AND expires_at > ${now()}
      ORDER BY created_at DESC LIMIT 1`,
     [userId, type]
   );
@@ -609,7 +583,7 @@ export async function get2FAStatus(userId) {
   if (user.two_factor_required && !has2FA && !graceStart) {
     graceStart = new Date();
     await query(
-      `UPDATE users SET two_factor_grace_period_start = NOW() WHERE id = $1`,
+      `UPDATE users SET two_factor_grace_period_start = ${now()} WHERE id = $1`,
       [userId]
     );
    
@@ -645,6 +619,11 @@ export async function get2FAStatus(userId) {
  * Check if user can proceed (not locked, or within grace period)
  */
 export async function checkUserCanProceed(userId) {
+  const userResult = await query('SELECT auth_provider FROM users WHERE id = $1', [userId]);
+  if (userResult.rows[0]?.auth_provider === 'saml') {
+    return { canProceed: true, reason: 'sso_user' };
+  }
+
   const status = await get2FAStatus(userId);
   
   // Check if account is temporarily unlocked
@@ -689,7 +668,7 @@ export async function startGracePeriod(userId, graceDays = 7) {
   await query(
     `UPDATE users 
      SET two_factor_required = true,
-         two_factor_grace_period_start = NOW(),
+         two_factor_grace_period_start = ${now()},
          two_factor_grace_days = $1
      WHERE id = $2`,
     [graceDays, userId]
@@ -729,7 +708,7 @@ export async function unlockUserAccount(userId, unlockDurationHours = null) {
        SET account_locked = false,
            account_locked_reason = NULL,
            account_unlock_expires = NULL,
-           two_factor_grace_period_start = NOW()
+           two_factor_grace_period_start = ${now()}
        WHERE id = $1`,
       [userId]
     );
@@ -745,7 +724,7 @@ export async function setUserGracePeriod(userId, graceDays) {
   await query(
     `UPDATE users 
      SET two_factor_grace_days = $1,
-         two_factor_grace_period_start = NOW()
+         two_factor_grace_period_start = ${now()}
      WHERE id = $2`,
     [graceDays, userId]
   );

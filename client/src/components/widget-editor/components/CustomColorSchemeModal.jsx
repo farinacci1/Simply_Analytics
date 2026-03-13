@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiPlus, FiMinus } from 'react-icons/fi';
 import * as d3 from 'd3';
-import './CustomColorSchemeModal.css';
+import '../../../styles/CustomColorSchemeModal.css';
 
 /**
  * Modern color scheme creator modal

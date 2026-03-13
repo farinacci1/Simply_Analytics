@@ -15,7 +15,7 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { executeQuery, createConnection } from '../db/snowflake.js';
+import { executeQuery, createConnection } from '../db/dashboardSessionManager.js';
 import sessionStore from '../db/redisSessionStore.js';
 
 // Verbose logging toggle
@@ -717,7 +717,7 @@ export async function authMiddleware(req, res, next) {
         // Try to decode the token to get sessionId for cleanup
         const tokenPayload = jwt.decode(token);
         if (tokenPayload?.sessionId) {
-          const { closeDashboardConnection } = await import('../db/snowflake.js');
+          const { closeDashboardConnection } = await import('../db/dashboardSessionManager.js');
           await closeDashboardConnection(tokenPayload.sessionId);
           log(`Closed Snowflake connections for ${result.serverRestarted ? 'invalidated' : 'expired'} session: ${tokenPayload.sessionId}`);
         }

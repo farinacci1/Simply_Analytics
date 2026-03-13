@@ -1923,14 +1923,6 @@
   flex-shrink: 0;
 }
 
-.replace-connection-modal .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
-}
 
 /* Folder Selector */
 .folder-selector {

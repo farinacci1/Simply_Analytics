@@ -39,7 +39,7 @@ import {
   FiPause,
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi2';
-import './DashboardWidget.css';
+import '../styles/DashboardWidget.css';
 import { renderChart as sharedRenderChart } from './ChartRenderer';
 import WidgetEditor from './widget-editor';
 // Note: buildQueryFromConfig removed - backend is now the single source of truth for SQL generation

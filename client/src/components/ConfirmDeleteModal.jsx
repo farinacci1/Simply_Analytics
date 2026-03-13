@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FiAlertTriangle, FiX } from 'react-icons/fi';
-import './ConfirmDeleteDialog.css';
+import '../styles/ConfirmDeleteModal.css';
 
 /**
  * Confirmation dialog that requires typing the name verbatim to delete
@@ -10,7 +10,7 @@ import './ConfirmDeleteDialog.css';
  * @param {function} onCancel - Called when dialog is cancelled
  * @param {string} error - Error message to display (optional)
  */
-const ConfirmDeleteDialog = ({ itemName, itemType = 'item', onConfirm, onCancel, error }) => {
+const ConfirmDeleteModal = ({ itemName, itemType = 'item', onConfirm, onCancel, error }) => {
   const [inputValue, setInputValue] = useState('');
   
   const isMatch = inputValue === itemName;
@@ -88,4 +88,4 @@ const ConfirmDeleteDialog = ({ itemName, itemType = 'item', onConfirm, onCancel,
   );
 };
 
-export default ConfirmDeleteDialog;
+export default ConfirmDeleteModal;

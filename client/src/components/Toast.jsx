@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { FiCheck, FiX, FiAlertTriangle, FiInfo, FiRotateCcw, FiTrash2 } from 'react-icons/fi';
-import './Toast.css';
+import '../styles/Toast.css';
 
 // Toast Context
 const ToastContext = createContext(null);

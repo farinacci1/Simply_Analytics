@@ -17,7 +17,7 @@ import {
   EditorHeader,
   AGGREGATION_OPTIONS,
 } from './components';
-import './WidgetEditor.css';
+import '../../styles/WidgetEditor.css';
 
 // Constants and utilities from widget-editor module
 import {

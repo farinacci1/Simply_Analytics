@@ -1,14 +1,6 @@
-/**
- * Group Service
- * 
- * Manages user groups for dashboard sharing.
- */
+import crypto from 'crypto';
+import { query, transaction } from '../db/db.js';
 
-import { query, transaction } from '../db/postgres.js';
-
-/**
- * Get all groups
- */
 export async function getAllGroups() {
   const result = await query(`
     SELECT 
@@ -23,9 +15,6 @@ export async function getAllGroups() {
   return result.rows;
 }
 
-/**
- * Get group by ID
- */
 export async function getGroupById(groupId) {
   const result = await query(`
     SELECT 
@@ -39,9 +28,6 @@ export async function getGroupById(groupId) {
   return result.rows[0] || null;
 }
 
-/**
- * Get groups that a user belongs to
- */
 export async function getGroupsForUser(userId) {
   const result = await query(`
     SELECT 
@@ -56,9 +42,6 @@ export async function getGroupsForUser(userId) {
   return result.rows;
 }
 
-/**
- * Get members of a group
- */
 export async function getGroupMembers(groupId) {
   const result = await query(`
     SELECT 
@@ -75,24 +58,23 @@ export async function getGroupMembers(groupId) {
   return result.rows;
 }
 
-/**
- * Create a new group
- */
 export async function createGroup({ name, description, createdBy }) {
-  const result = await query(`
-    INSERT INTO user_groups (name, description, created_by)
-    VALUES ($1, $2, $3)
-    RETURNING id, name, description, created_at
-  `, [name, description || null, createdBy]);
+  const id = crypto.randomUUID();
+
+  await query(`
+    INSERT INTO user_groups (id, name, description, created_by)
+    VALUES ($1, $2, $3, $4)
+  `, [id, name, description || null, createdBy]);
+
+  const result = await query(
+    'SELECT id, name, description, created_at FROM user_groups WHERE id = $1',
+    [id]
+  );
 
   return result.rows[0];
 }
 
-/**
- * Update a group
- */
 export async function updateGroup(groupId, updates, updatedByUser) {
-  // Only owner/admin or group creator can update
   const group = await getGroupById(groupId);
   if (!group) {
     throw new Error('Group not found');
@@ -120,26 +102,26 @@ export async function updateGroup(groupId, updates, updatedByUser) {
   }
 
   values.push(groupId);
-  const result = await query(`
+  await query(`
     UPDATE user_groups
     SET ${setClauses.join(', ')}
     WHERE id = $${paramIndex}
-    RETURNING id, name, description, updated_at
   `, values);
+
+  const result = await query(
+    'SELECT id, name, description, updated_at FROM user_groups WHERE id = $1',
+    [groupId]
+  );
 
   return result.rows[0];
 }
 
-/**
- * Delete a group
- */
 export async function deleteGroup(groupId, deletedByUser) {
   const group = await getGroupById(groupId);
   if (!group) {
     throw new Error('Group not found');
   }
 
-  // Only owner/admin or group creator can delete
   if (!['owner', 'admin'].includes(deletedByUser.role) && group.created_by !== deletedByUser.id) {
     throw new Error('You do not have permission to delete this group');
   }
@@ -148,17 +130,12 @@ export async function deleteGroup(groupId, deletedByUser) {
   return true;
 }
 
-/**
- * Add a user to a group
- */
 export async function addUserToGroup(groupId, userId, addedBy) {
-  // Check if group exists
   const group = await getGroupById(groupId);
   if (!group) {
     throw new Error('Group not found');
   }
 
-  // Check if already a member
   const existing = await query(
     'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
     [groupId, userId]
@@ -168,43 +145,42 @@ export async function addUserToGroup(groupId, userId, addedBy) {
     throw new Error('User is already a member of this group');
   }
 
+  const id = crypto.randomUUID();
   await query(`
-    INSERT INTO group_members (group_id, user_id, added_by)
-    VALUES ($1, $2, $3)
-  `, [groupId, userId, addedBy]);
+    INSERT INTO group_members (id, group_id, user_id, added_by)
+    VALUES ($1, $2, $3, $4)
+  `, [id, groupId, userId, addedBy]);
 
   return true;
 }
 
-/**
- * Remove a user from a group
- */
 export async function removeUserFromGroup(groupId, userId, removedByUser) {
   const group = await getGroupById(groupId);
   if (!group) {
     throw new Error('Group not found');
   }
 
-  // Only owner/admin or group creator can remove members
   if (!['owner', 'admin'].includes(removedByUser.role) && group.created_by !== removedByUser.id) {
     throw new Error('You do not have permission to remove members from this group');
   }
 
-  const result = await query(
+  const existing = await query(
+    'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
+    [groupId, userId]
+  );
+
+  if (existing.rows.length === 0) {
+    throw new Error('User is not a member of this group');
+  }
+
+  await query(
     'DELETE FROM group_members WHERE group_id = $1 AND user_id = $2',
     [groupId, userId]
   );
 
-  if (result.rowCount === 0) {
-    throw new Error('User is not a member of this group');
-  }
-
   return true;
 }
 
-/**
- * Check if a user is in a group
- */
 export async function isUserInGroup(groupId, userId) {
   const result = await query(
     'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
@@ -214,9 +190,6 @@ export async function isUserInGroup(groupId, userId) {
   return result.rows.length > 0;
 }
 
-/**
- * Get all groups that have access to a dashboard
- */
 export async function getGroupsForDashboard(dashboardId) {
   const result = await query(`
     SELECT 
@@ -233,31 +206,25 @@ export async function getGroupsForDashboard(dashboardId) {
   return result.rows;
 }
 
-/**
- * Grant group access to a dashboard
- */
 export async function grantGroupAccess(dashboardId, groupId, grantedBy) {
-  // Check if already has access
   const existing = await query(
     'SELECT id FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2',
     [dashboardId, groupId]
   );
 
   if (existing.rows.length > 0) {
-    return true; // Already has access
+    return true;
   }
 
+  const id = crypto.randomUUID();
   await query(`
-    INSERT INTO dashboard_group_access (dashboard_id, group_id, granted_by)
-    VALUES ($1, $2, $3)
-  `, [dashboardId, groupId, grantedBy]);
+    INSERT INTO dashboard_group_access (id, dashboard_id, group_id, granted_by)
+    VALUES ($1, $2, $3, $4)
+  `, [id, dashboardId, groupId, grantedBy]);
 
   return true;
 }
 
-/**
- * Revoke group access from a dashboard
- */
 export async function revokeGroupAccess(dashboardId, groupId) {
   await query(
     'DELETE FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2',

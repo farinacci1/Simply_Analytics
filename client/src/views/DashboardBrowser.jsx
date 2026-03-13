@@ -11,9 +11,9 @@ import {
 } from 'react-icons/fi';
 import { folderApi, groupApi, dashboardApi } from '../api/apiClient';
 import { useAppStore } from '../store/appStore';
-import CreateDashboardModal from './CreateDashboardModal';
-import ConfirmDeleteDialog from './ConfirmDeleteDialog';
-import './DashboardBrowser.css';
+import CreateDashboardModal from '../components/CreateDashboardModal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import '../styles/DashboardBrowser.css';
 
 export default function DashboardBrowser() {
   const navigate = useNavigate();
@@ -677,21 +677,23 @@ export default function DashboardBrowser() {
             {/* Empty state */}
             {folders.length === 0 && dashboards.length === 0 && (
               <div className="browser-empty">
-                <FiGrid className="empty-icon" />
+                <div className="empty-icon-wrapper">
+                  <FiGrid />
+                </div>
                 <h2>
-                  {currentFolderId ? 'This folder is empty' : 'No dashboards available'}
+                  {currentFolderId ? 'This folder is empty' : 'No dashboards yet'}
                 </h2>
                 <p>
                   {canCreateDashboards 
                     ? (currentFolderId 
-                        ? 'Create a dashboard or folder to get started'
-                        : 'Create your first dashboard to start analyzing data')
+                        ? 'Add a dashboard or folder to organize your work'
+                        : 'Create your first dashboard to start visualizing and analyzing your data.')
                     : 'You don\'t have access to any dashboards yet. Contact an admin to get access.'
                   }
                 </p>
                 {canCreateDashboards && (
                   <button 
-                    className="btn btn-primary btn-lg"
+                    className="btn btn-primary"
                     onClick={() => setShowCreateDashboard(true)}
                   >
                     <FiPlus /> Create Dashboard
@@ -844,7 +846,7 @@ export default function DashboardBrowser() {
       
       {/* Delete Folder Confirmation */}
       {deletingFolder && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           isOpen={true}
           itemName={deletingFolder.name}
           itemType="folder"
@@ -859,7 +861,7 @@ export default function DashboardBrowser() {
       
       {/* Delete Dashboard Confirmation */}
       {deletingDashboard && (
-        <ConfirmDeleteDialog
+        <ConfirmDeleteModal
           isOpen={true}
           itemName={deletingDashboard.name}
           itemType="dashboard"

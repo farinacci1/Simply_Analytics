@@ -1,6 +1,6 @@
 /**
- * Two-Factor Authentication Settings - Clean & Minimal
- * Matches UserSettings design system
+ * Two-Factor Authentication Settings
+ * Consistent with updated UserSettings design
  */
 
 /* ============================================
@@ -22,20 +22,20 @@
 }
 
 .two-factor-settings .spinner {
-  animation: spin 1s linear infinite;
+  animation: tfaSpin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes tfaSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-/* Section Header - matches UserSettings */
+/* Section Header - consistent with UserSettings */
 .two-factor-settings .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
 }
 
 .two-factor-settings .section-header h2 {
@@ -43,30 +43,37 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .two-factor-settings .section-header h2 svg {
-  font-size: 16px;
-  opacity: 0.6;
+  font-size: 17px;
+  color: var(--accent-color);
+  opacity: 0.8;
 }
 
 .two-factor-settings .section-header p {
-  margin: 0;
+  margin: 3px 0 0;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-/* Section Card - matches UserSettings */
+/* Section Card - consistent with UserSettings */
 .two-factor-settings .section-card {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 24px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.two-factor-settings .section-card:hover {
+  box-shadow: var(--shadow-card-hover);
 }
 
 .two-factor-settings .tfa-card {
@@ -98,11 +105,13 @@
 .two-factor-settings .alert.error {
   background: rgba(239, 68, 68, 0.08);
   color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 .two-factor-settings .alert.warning {
   background: rgba(245, 158, 11, 0.08);
   color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.15);
 }
 
 .two-factor-settings .alert.warning strong {
@@ -146,7 +155,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   border-radius: 8px;
   border: 1px solid var(--border-primary);
   transition: border-color 0.15s;
@@ -206,11 +215,11 @@
    ============================================ */
 
 .auth-method-section {
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 10px;
   padding: 18px 20px;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .auth-method-section:hover {
@@ -292,7 +301,7 @@
 }
 
 .two-factor-settings .btn-secondary:hover:not(:disabled) {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   border-color: var(--border-secondary);
 }
 
@@ -336,7 +345,7 @@
 }
 
 .two-factor-settings .btn-icon:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -406,18 +415,24 @@
 }
 
 .two-factor-settings .modal {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 420px;
-  max-height: 85vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  animation: modalIn 0.2s ease;
+  box-shadow: var(--shadow-xl);
+  animation: tfaModalIn 0.2s ease;
 }
 
-@keyframes modalIn {
+.two-factor-settings .totp-setup-modal {
+  max-width: 440px;
+}
+
+@keyframes tfaModalIn {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
@@ -426,8 +441,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
 }
 
 .two-factor-settings .modal-header h2 {
@@ -459,23 +475,16 @@
 }
 
 .two-factor-settings .close-btn:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .two-factor-settings .modal-body {
-  padding: 24px;
+  padding: 20px 24px;
   overflow-y: auto;
-  max-height: 60vh;
-}
-
-.two-factor-settings .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-primary);
-  background: var(--bg-primary);
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ============================================
@@ -483,21 +492,23 @@
    ============================================ */
 
 .setup-steps {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .step {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 14px;
+  gap: 10px;
+  font-size: 13px;
   color: var(--text-primary);
   font-weight: 500;
+  min-width: 0;
 }
 
 .step-number {
   width: 24px;
   height: 24px;
+  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -506,26 +517,27 @@
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .qr-code-container {
   display: flex;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   background: white;
   border-radius: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .qr-code-container img {
-  width: 160px;
-  height: 160px;
+  width: 140px;
+  height: 140px;
   border-radius: 8px;
 }
 
 .manual-entry {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .manual-entry p {
@@ -540,35 +552,38 @@
   background: var(--bg-tertiary);
   border-radius: 6px;
   font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 14px;
-  letter-spacing: 2px;
+  font-size: 13px;
+  letter-spacing: 1px;
   color: var(--text-primary);
   user-select: all;
+  word-break: break-all;
+  max-width: 100%;
 }
 
 .verify-code-input {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+  position: relative;
+  max-width: 100%;
 }
 
 .verify-code-input input {
-  flex: 1;
-  padding: 14px 18px;
-  background: var(--bg-primary);
+  width: 100%;
+  padding: 14px 50px 14px 18px;
+  background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
-  font-size: 24px;
+  font-size: 20px;
   font-family: 'SF Mono', 'Fira Code', monospace;
   text-align: center;
-  letter-spacing: 8px;
+  letter-spacing: 6px;
   color: var(--text-primary);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 
 .verify-code-input input:focus {
   outline: none;
   border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
 .verify-code-input input::placeholder {
@@ -577,8 +592,47 @@
   font-size: 16px;
 }
 
-.verify-btn {
-  padding: 14px 20px !important;
+.verify-btn-inline {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  padding: 0;
+  font-size: 18px;
+}
+
+.verify-btn-inline:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.verify-btn-inline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.totp-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.totp-inline-error svg {
+  flex-shrink: 0;
+  font-size: 13px;
 }
 
 /* ============================================
@@ -663,6 +717,7 @@
   padding: 12px;
   background: rgba(245, 158, 11, 0.08);
   border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.15);
 }
 
 /* ============================================
@@ -684,17 +739,18 @@
 .two-factor-settings .form-group input {
   width: 100%;
   padding: 12px 14px;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   font-size: 14px;
   color: var(--text-primary);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .two-factor-settings .form-group input:focus {
   outline: none;
   border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
 .two-factor-settings .form-group input::placeholder {
@@ -709,6 +765,67 @@
   background: var(--bg-tertiary);
   border-radius: 8px;
   line-height: 1.5;
+}
+
+.two-factor-settings .passkey-modal {
+  max-width: 360px;
+}
+
+.two-factor-settings .passkey-modal .modal-footer {
+  border-top: none;
+  background: transparent;
+  padding-top: 4px;
+}
+
+.passkey-form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.passkey-form-group .label-hint {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.passkey-form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.passkey-form-group input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.passkey-form-group input::placeholder {
+  color: var(--text-muted);
+}
+
+.passkey-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.passkey-hint svg {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--accent-color);
 }
 
 /* ============================================
@@ -751,16 +868,9 @@
     gap: 8px;
   }
   
-  .verify-code-input {
-    flex-direction: column;
-  }
-  
   .verify-code-input input {
-    width: 100%;
-  }
-  
-  .verify-btn {
-    width: 100%;
+    font-size: 18px;
+    letter-spacing: 4px;
   }
   
   .two-factor-settings .modal {

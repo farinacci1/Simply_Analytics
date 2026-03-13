@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '../../store/appStore';
-import './DataTable.css';
+import '../../styles/DataTable.css';
 
 /**
  * TanStack Table based component for dashboards

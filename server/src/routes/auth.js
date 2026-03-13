@@ -25,7 +25,7 @@ import {
   autoSwitchFromSystemRole,
   isSystemRole,
 } from '../middleware/auth.js';
-import { closeDashboardConnection } from '../db/snowflake.js';
+import { closeDashboardConnection } from '../db/dashboardSessionManager.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h'; // 8 hours max
@@ -96,6 +96,14 @@ authRoutes.post('/login', async (req, res) => {
     const userByUsername = await userService.getUserByUsername(username);
     
     if (userByUsername) {
+      if (userByUsername.auth_provider === 'saml') {
+        return res.status(400).json({
+          success: false,
+          error: 'This account uses SSO. Please sign in via your identity provider.',
+          code: 'SSO_ACCOUNT',
+        });
+      }
+
       // Check if account is locked BEFORE validating credentials
       const lockStatus = await userService.isAccountLocked(userByUsername.id);
       if (lockStatus.locked) {

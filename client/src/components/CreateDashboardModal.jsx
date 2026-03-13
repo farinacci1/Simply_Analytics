@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FiX, FiDatabase, FiMessageSquare, FiShield, FiLoader, FiCheck, FiAlertCircle, FiLock, FiLink, FiFolder, FiHome, FiPlus, FiSearch } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { semanticApi, dashboardApi, sfConnectionApi, folderApi } from '../api/apiClient';
-import './CreateDashboardModal.css';
+import '../styles/CreateDashboardModal.css';
 
 const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) => {
   const { 
