@@ -1,0 +1,132 @@
+import { fetchApi, safeJson } from './fetchCore.js';
+
+export const sfConnectionApi = {
+  async getAll() {
+    const res = await fetchApi('/connections');
+    return safeJson(res, { connections: [] });
+  },
+
+  async getById(connectionId) {
+    const res = await fetchApi(`/connections/${connectionId}`);
+    return safeJson(res, { connection: null });
+  },
+
+  async create(connectionData) {
+    const res = await fetchApi('/connections', {
+      method: 'POST',
+      body: JSON.stringify(connectionData),
+    });
+    if (!res.ok) {
+      const error = await safeJson(res, { error: 'Failed to create connection' });
+      throw new Error(error.error);
+    }
+    return safeJson(res, { connection: null });
+  },
+
+  async update(connectionId, updates) {
+    const res = await fetchApi(`/connections/${connectionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const error = await safeJson(res, { error: 'Failed to update connection' });
+      throw new Error(error.error);
+    }
+    return safeJson(res, { connection: null });
+  },
+
+  async delete(connectionId) {
+    const res = await fetchApi(`/connections/${connectionId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const error = await safeJson(res, { error: 'Failed to delete connection' });
+      throw new Error(error.error);
+    }
+    return safeJson(res, { success: false });
+  },
+
+  async test(connectionId) {
+    const res = await fetchApi(`/connections/${connectionId}/test`, {
+      method: 'POST',
+    });
+    return safeJson(res, { success: false, error: 'Test failed' });
+  },
+
+  async getResources(connectionId, role = null) {
+    const params = role ? `?role=${encodeURIComponent(role)}` : '';
+    const res = await fetchApi(`/connections/${connectionId}/resources${params}`);
+    return safeJson(res, { roles: [], warehouses: [], semanticViews: [], cortexAgents: [] });
+  },
+
+  /**
+   * Force refresh/clear a cached Snowflake connection
+   * Use when IP changes (VPN) or connection becomes stale
+   */
+  async refresh(connectionId) {
+    const res = await fetchApi(`/connections/${connectionId}/refresh`, {
+      method: 'POST',
+    });
+    return safeJson(res, { success: false });
+  },
+
+  /**
+   * Clear ALL cached Snowflake connections for the current session
+   */
+  async clearAllConnections() {
+    const res = await fetchApi('/connections/clear-all', {
+      method: 'POST',
+    });
+    return safeJson(res, { success: false });
+  },
+
+  /**
+   * Stream a Cortex Agent conversation via SSE.
+   * @param {Object} params - { connectionId, agentFqn, messages, threadId?, parentMessageId? }
+   * @param {Function} onEvent - (eventType, data) => void
+   * @param {AbortSignal} signal - optional abort signal
+   * @returns {Promise<void>} resolves when stream ends
+   */
+  async cortexAgentRun(params, onEvent, signal) {
+    const res = await fetchApi('/semantic/cortex/agent/run', {
+      method: 'POST',
+      body: JSON.stringify(params),
+      signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `Request failed: ${res.status}` }));
+      throw new Error(err.error || 'Cortex Agent request failed');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      let currentEvent = 'message';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          const raw = line.slice(6);
+          try {
+            const data = JSON.parse(raw);
+            onEvent(currentEvent, data);
+          } catch {
+            onEvent(currentEvent, raw);
+          }
+        } else if (line === '') {
+          currentEvent = 'message';
+        }
+      }
+    }
+  },
+};
