@@ -69,27 +69,19 @@ npm run install:all
 
 ### Configure
 
-Create `server/.env`:
+Run the interactive setup wizard — it walks through every credential, auto-generates secrets, and writes the `.env` files for you:
 
-```env
-NODE_ENV=development
-PORT=3001
-
-# PostgreSQL
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-POSTGRES_DATABASE=simply_analytics
-
-# Auth (generate strong random values)
-JWT_SECRET=your-secret-min-32-characters-long
-JWT_EXPIRY=8h
-CREDENTIALS_ENCRYPTION_KEY=your-encryption-key-32-chars
-
-# CORS
-CORS_ORIGINS=http://localhost:5173
+```bash
+npm run setup
 ```
+
+Or, if you prefer to configure manually, copy the example and fill in your values:
+
+```bash
+cp server/.env.example server/.env
+```
+
+See [server/.env.example](server/.env.example) for the full list of variables.
 
 ### Migrate
 
@@ -116,6 +108,7 @@ npm run dev
 ## Docker Deployment
 
 ```bash
+npm run setup          # choose "docker" or "both" when prompted
 docker compose up -d
 ```
 
