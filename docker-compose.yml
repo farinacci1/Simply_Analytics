@@ -1,74 +1,23 @@
-version: '3.8'
-
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: simply-redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - simply-network
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: simply-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-simply_analytics}
-      POSTGRES_USER: ${POSTGRES_USER:-simply}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-simply}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - simply-network
-
   api:
     build:
       context: ./server
       dockerfile: Dockerfile
     container_name: simply-api
-    ports:
-      - "3001:3001"
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    env_file:
-      - ./server/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - REDIS_URL=redis://redis:6379
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
     volumes:
-      - ./server/keys:/app/keys:ro
+      - config-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
     restart: unless-stopped
-    networks:
-      - simply-network
 
   client:
     build:
@@ -78,15 +27,9 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - simply-network
-
-networks:
-  simply-network:
-    driver: bridge
 
 volumes:
-  redis-data:
-  postgres-data:
+  config-data:

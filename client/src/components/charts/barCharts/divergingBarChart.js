@@ -28,13 +28,32 @@ const renderXValueAxis = (axisGroup, scale, chartWidth) => {
     .selectAll('text').style('fill', STYLES.axis.textColor).style('font-size', STYLES.axis.fontSize);
 };
 
+const measureLabelWidth = (labels, fontSize = '11px') => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${fontSize} Outfit, system-ui, sans-serif`;
+  let max = 0;
+  for (const label of labels) {
+    const w = ctx.measureText(truncateLabel(String(label ?? ''), 20)).width;
+    if (w > max) max = w;
+  }
+  return Math.ceil(max);
+};
+
 export const createDivergingBarChart = (container, config, data, options = {}) => {
   if (!container || !data || data.length === 0) return { update: () => {}, destroy: () => {} };
 
   const hideYAxis = options.hideYAxis || false;
 
+  const yField_ = config.x_axis;
+  const labels = yField_ ? data.map(d => d[yField_]).filter(Boolean) : [];
+  const containerWidth = container.getBoundingClientRect().width || 400;
+  const measuredLeft = labels.length > 0 ? measureLabelWidth(labels) + 16 : 100;
+  const maxLeft = Math.round(containerWidth * 0.35);
+  const dynamicLeft = Math.max(60, Math.min(measuredLeft, maxLeft));
+
   const opts = parseChartOptions(container, options, {
-    defaultMargin: options.margin || { top: 20, right: 30, bottom: 35, left: 100 },
+    defaultMargin: options.margin || { top: 20, right: 30, bottom: 35, left: dynamicLeft },
   });
 
   const { showLegend, legendPosition, xAxisTitle, yAxisTitle, showGrid, showLabels, animate,

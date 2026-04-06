@@ -3,6 +3,7 @@
  * 
  * Manages connection pool for the application database
  * which stores users, connections, dashboards, and groups.
+ * Supports hot-reload via reconnectPool().
  */
 
 import pg from 'pg';
@@ -12,26 +13,32 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Create connection pool
-const pool = new Pool({
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  database: process.env.POSTGRES_DB || 'simply_analytics',
-  user: process.env.POSTGRES_USER || 'postgres',
-  password: process.env.POSTGRES_PASSWORD || 'postgres',
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+function createPool() {
+  const p = new Pool({
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    database: process.env.POSTGRES_DB || 'simply_analytics',
+    user: process.env.POSTGRES_USER || 'postgres',
+    password: process.env.POSTGRES_PASSWORD || 'postgres',
+    min: 2,
+    max: 20,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 2000,
+  });
+  let poolReady = false;
+  p.on('connect', () => {
+    if (!poolReady) {
+      poolReady = true;
+      console.log('PostgreSQL: Pool connected');
+    }
+  });
+  p.on('error', (err) => {
+    console.error('PostgreSQL: Unexpected error on idle client', err);
+  });
+  return p;
+}
 
-// Test connection on startup
-pool.on('connect', () => {
-  console.log('PostgreSQL: New client connected to pool');
-});
-
-pool.on('error', (err) => {
-  console.error('PostgreSQL: Unexpected error on idle client', err);
-});
+let pool = createPool();
 
 /**
  * Execute a query with parameters
@@ -116,11 +123,24 @@ export async function closePool() {
   console.log('PostgreSQL: Connection pool closed');
 }
 
+/**
+ * Tear down the current pool and create a new one with current process.env values.
+ * Used by hot-reload when database config changes.
+ */
+export async function reconnectPool() {
+  try {
+    await pool.end();
+  } catch (_) {}
+  pool = createPool();
+  console.log('PostgreSQL: Pool reconnected with new config');
+}
+
 export default {
   query,
   getClient,
   transaction,
   testConnection,
   closePool,
+  reconnectPool,
   pool,
 };

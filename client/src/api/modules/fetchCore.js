@@ -2,7 +2,7 @@
  * Shared API fetch core: base URL, auth, request queue, session callbacks, fetchApi.
  */
 
-export const API_BASE = import.meta.env.VITE_API_URL || '/api';
+export const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 const DEBUG = import.meta.env.VITE_DEBUG === 'true';
 const log = (...args) => {

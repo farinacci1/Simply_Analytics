@@ -19,7 +19,6 @@ export default function useCalcFieldsPersistence({
   const lastSavedCalcFieldsRef = useRef(null);
   const calcFieldsLoadedRef = useRef(false);
 
-  // Auto-save calculated fields to dashboard when they change
   useEffect(() => {
     if (!currentDashboard || !semanticViewId) return;
     const currentKey = JSON.stringify(customColumns.map(c => ({ name: c.name, expression: c.expression })));
@@ -55,7 +54,6 @@ export default function useCalcFieldsPersistence({
     return () => clearTimeout(timer);
   }, [customColumns, currentDashboard?.id, semanticViewId, semanticViews]);
 
-  // Load dashboard-level calc fields and aliases on semantic view change
   useEffect(() => {
     if (!semanticViewId || !currentDashboard?.semanticViewsReferenced) return;
     if (calcFieldsLoadedRef.current) return;

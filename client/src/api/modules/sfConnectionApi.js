@@ -59,6 +59,31 @@ export const sfConnectionApi = {
     return safeJson(res, { roles: [], warehouses: [], semanticViews: [], cortexAgents: [] });
   },
 
+  async openConfigSession(connectionId) {
+    const res = await fetchApi(`/connections/${connectionId}/config-session`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await safeJson(res, { error: 'Failed to open config session' });
+      throw new Error(err.error);
+    }
+    return safeJson(res, { roles: [] });
+  },
+
+  async configSessionWarehouses(connectionId, role) {
+    const res = await fetchApi(`/connections/${connectionId}/config-session/warehouses`, {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const err = await safeJson(res, { error: 'Failed to load warehouses' });
+      throw new Error(err.error);
+    }
+    return safeJson(res, { warehouses: [] });
+  },
+
+  async closeConfigSession(connectionId) {
+    await fetchApi(`/connections/${connectionId}/config-session`, { method: 'DELETE' }).catch(() => {});
+  },
+
   /**
    * Force refresh/clear a cached Snowflake connection
    * Use when IP changes (VPN) or connection becomes stale

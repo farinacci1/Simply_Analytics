@@ -1,31 +1,29 @@
 import crypto from 'crypto';
 import { query } from '../db/db.js';
 import { now } from '../db/db.js';
-
-const SCIM_ENABLED = process.env.SCIM_ENABLED === 'true';
-const SCIM_BEARER_TOKEN = process.env.SCIM_BEARER_TOKEN;
+import configStore from '../config/configStore.js';
 
 const ROLE_MAP = {
   admin: 'admin',
-  editor: 'creator',
-  creator: 'creator',
+  editor: 'editor',
   viewer: 'viewer',
 };
 
 export function isEnabled() {
-  return SCIM_ENABLED;
+  return configStore.get('SCIM_ENABLED') === 'true';
 }
 
 export function validateToken(authHeader) {
-  if (!SCIM_ENABLED) return false;
-  if (!SCIM_BEARER_TOKEN || SCIM_BEARER_TOKEN === 'generate-a-secure-random-token-here') {
+  if (!isEnabled()) return false;
+  const bearerToken = configStore.get('SCIM_BEARER_TOKEN');
+  if (!bearerToken || bearerToken === 'generate-a-secure-random-token-here') {
     throw new Error('SCIM_BEARER_TOKEN is not configured');
   }
   if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
   const token = authHeader.slice(7);
   return crypto.timingSafeEqual(
     Buffer.from(token),
-    Buffer.from(SCIM_BEARER_TOKEN)
+    Buffer.from(bearerToken)
   );
 }
 

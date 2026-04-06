@@ -1,8 +1,11 @@
 import { fetchApi, safeJson } from './fetchCore.js';
 
 export const dashboardApi = {
-  async list() {
-    const res = await fetchApi('/dashboard');
+  async list(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.workspaceId) qs.set('workspaceId', params.workspaceId);
+    const url = qs.toString() ? `/dashboard?${qs}` : '/dashboard';
+    const res = await fetchApi(url);
     if (!res.ok) {
       const data = await safeJson(res, { error: 'Failed to load dashboards' });
       // For MFA required errors, throw to display message

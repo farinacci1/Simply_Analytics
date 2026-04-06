@@ -1,6 +1,5 @@
 export const createColorSchemeSlice = (set, get) => ({
   savedColorSchemes: [],
-  colorPalettes: null,
 
   generateSchemeId: () => {
     return 'cs_' + crypto.randomUUID();
@@ -119,12 +118,4 @@ export const createColorSchemeSlice = (set, get) => ({
     return { success: true };
   },
 
-  loadColorSchemes: async () => {
-    // Color schemes are now loaded with the dashboard — kept for backwards compatibility
-  },
-
-  getColorPalettes: () => {
-    const { colorPalettes } = get();
-    return colorPalettes || { palettes: {}, default: 'ocean' };
-  },
 });

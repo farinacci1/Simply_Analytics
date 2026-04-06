@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate, useSearchParams, useParams } from 'react-router-dom';
 import { useAppStore } from './store/appStore';
 import SideNav from './components/SideNav';
 
@@ -8,6 +8,9 @@ import DashboardView from './views/DashboardView';
 import GettingStarted from './views/GettingStarted';
 import UsersManagement from './views/UsersManagement';
 import UserSettings from './views/UserSettings';
+import AskView from './views/AskView';
+import AdminPanel from './views/AdminPanel';
+import WorkspacesView from './views/WorkspacesView';
 import SignInModal from './components/SignInModal';
 import SessionWarningModal from './components/SessionWarningModal';
 import { startSessionMonitoring, stopSessionMonitoring, persistSession } from './api/apiClient';
@@ -19,24 +22,74 @@ function useDashboardFocusMode() {
   const [searchParams] = useSearchParams();
   
   return useMemo(() => {
-    const isDashboardRoute = location.pathname === '/dashboards';
+    const isDashboardRoute = /^\/workspaces\/[^/]+\/dashboards$/.test(location.pathname);
     const hasDashboardId = searchParams.has('id');
     return isDashboardRoute && hasDashboardId;
   }, [location.pathname, searchParams]);
 }
 
 // Wrapper component that shows browser or view based on URL params
+// Also syncs workspace from URL param to store
 function DashboardsPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { workspaceId } = useParams();
+  const { activeWorkspace, workspaces, switchWorkspace, isLoadingWorkspaces } = useAppStore();
+
+  useEffect(() => {
+    if (!workspaceId || isLoadingWorkspaces) return;
+    if (activeWorkspace?.id === workspaceId) return;
+    const match = workspaces.find(w => w.id === workspaceId);
+    if (match) {
+      switchWorkspace(match);
+    } else if (workspaces.length > 0) {
+      navigate('/workspaces', { replace: true });
+    }
+  }, [workspaceId, activeWorkspace?.id, workspaces, switchWorkspace, isLoadingWorkspaces, navigate]);
+
   const dashboardId = searchParams.get('id');
-  
-  // If a dashboard ID is in the URL, show the dashboard view
-  // Otherwise, show the browser
-  if (dashboardId) {
-    return <DashboardView />;
-  }
-  
+  if (dashboardId) return <DashboardView />;
   return <DashboardBrowser />;
+}
+
+// Wrapper for WorkspacesView that syncs workspace from URL param
+function WorkspacesPage() {
+  const navigate = useNavigate();
+  const { workspaceId } = useParams();
+  const { activeWorkspace, workspaces, switchWorkspace, isLoadingWorkspaces } = useAppStore();
+
+  useEffect(() => {
+    if (!workspaceId || isLoadingWorkspaces) return;
+    if (activeWorkspace?.id === workspaceId) return;
+    const match = workspaces.find(w => w.id === workspaceId);
+    if (match) {
+      switchWorkspace(match);
+    } else if (workspaces.length > 0) {
+      navigate('/workspaces', { replace: true });
+    }
+  }, [workspaceId, activeWorkspace?.id, workspaces, switchWorkspace, isLoadingWorkspaces, navigate]);
+
+  return <WorkspacesView />;
+}
+
+// Wrapper for AskView that syncs workspace from URL param
+function AskPage() {
+  const navigate = useNavigate();
+  const { workspaceId } = useParams();
+  const { activeWorkspace, workspaces, switchWorkspace, isLoadingWorkspaces } = useAppStore();
+
+  useEffect(() => {
+    if (!workspaceId || isLoadingWorkspaces) return;
+    if (activeWorkspace?.id === workspaceId) return;
+    const match = workspaces.find(w => w.id === workspaceId);
+    if (match) {
+      switchWorkspace(match);
+    } else if (workspaces.length > 0) {
+      navigate('/workspaces', { replace: true });
+    }
+  }, [workspaceId, activeWorkspace?.id, workspaces, switchWorkspace, isLoadingWorkspaces, navigate]);
+
+  return <AskView />;
 }
 
 // Map routes to activeView values for store sync
@@ -44,16 +97,16 @@ const routeToView = {
   '/': 'home',
   '/home': 'home',
   '/models': 'models',
-  '/dashboards': 'dashboards',
+  '/workspaces': 'workspaces',
   '/users': 'users',
   '/settings': 'settings',
+  '/admin': 'admin',
 };
 
 // Protected route wrapper - defined OUTSIDE App to prevent remounting children on re-render
-function ProtectedRoute({ children, requiredRoles = null }) {
-  const { isAuthenticated, isInitialized, currentRole } = useAppStore();
+function ProtectedRoute({ children, requiredRoles = null, requireAskAccess = false, requireSecureAuth = false }) {
+  const { isAuthenticated, isInitialized, currentRole, askHasAccess, currentUser } = useAppStore();
   
-  // Wait for app to initialize before checking auth
   if (!isInitialized) {
     return (
       <div className="loading-container">
@@ -65,7 +118,17 @@ function ProtectedRoute({ children, requiredRoles = null }) {
     return <Navigate to="/" replace />;
   }
   if (requiredRoles && !requiredRoles.includes(currentRole)) {
-    return <Navigate to="/dashboards" replace />;
+    return <Navigate to="/workspaces" replace />;
+  }
+  if (requireSecureAuth) {
+    const hasSecureAuth = currentUser?.auth_provider === 'saml' ||
+      currentUser?.totp_enabled || currentUser?.passkey_enabled;
+    if (!hasSecureAuth) {
+      return <Navigate to="/workspaces" replace />;
+    }
+  }
+  if (requireAskAccess && askHasAccess === false) {
+    return <Navigate to="/workspaces" replace />;
   }
   return children;
 }
@@ -79,6 +142,7 @@ function App() {
     isInitialized,
     signOut,
     currentRole,
+    emergencyMode,
   } = useAppStore();
 
   const navigate = useNavigate();
@@ -89,6 +153,12 @@ function App() {
   const [showSessionWarningModal, setShowSessionWarningModal] = useState(false);
   const [sessionTimeRemaining, setSessionTimeRemaining] = useState(0);
   const [sessionEndReason, setSessionEndReason] = useState(null);
+
+  const openSignIn = useCallback(() => setShowSignIn(true), []);
+  const closeSignIn = useCallback(() => setShowSignIn(false), []);
+
+  const isLandingPage = !isAuthenticated && (location.pathname === '/' || location.pathname === '/home');
+  const showSideNav = !isDashboardFocusMode && !isLandingPage;
 
   // Initialize app and theme on mount
   useEffect(() => {
@@ -103,6 +173,7 @@ function App() {
           username: payload.username,
           email: payload.email,
           role: payload.role,
+          auth_provider: 'saml',
         };
         persistSession(user, ssoToken);
         window.history.replaceState({}, '', window.location.pathname);
@@ -118,8 +189,9 @@ function App() {
 
   // Sync store activeView with current route on mount/route change
   useEffect(() => {
-    const pathBase = '/' + location.pathname.split('/')[1]; // Get first path segment
-    const viewFromRoute = routeToView[pathBase] || routeToView[location.pathname];
+    const pathBase = '/' + location.pathname.split('/')[1];
+    let viewFromRoute = routeToView[pathBase] || routeToView[location.pathname];
+    if (!viewFromRoute && pathBase === '/workspaces') viewFromRoute = 'workspaces';
     if (viewFromRoute && viewFromRoute !== activeView) {
       setActiveView(viewFromRoute);
     }
@@ -170,8 +242,7 @@ function App() {
   }, [sessionEndReason]);
 
 
-  // Home route - redirect to dashboards if authenticated
-  const HomeRoute = () => {
+  const homeElement = useMemo(() => {
     if (!isInitialized) {
       return (
         <div className="loading-container">
@@ -180,22 +251,45 @@ function App() {
       );
     }
     if (isAuthenticated) {
-      return <Navigate to="/dashboards" replace />;
+      return <Navigate to="/workspaces" replace />;
     }
-    return <GettingStarted onSignIn={() => setShowSignIn(true)} />;
-  };
+    return <GettingStarted onSignIn={openSignIn} />;
+  }, [isInitialized, isAuthenticated, openSignIn]);
+
+  // Bootstrap admin or emergency mode — redirect to /admin after login
+  useEffect(() => {
+    if (isAuthenticated && (currentRole === 'bootstrap_admin' || emergencyMode) && location.pathname !== '/admin') {
+      navigate('/admin', { replace: true });
+    }
+  }, [isAuthenticated, currentRole, emergencyMode, location.pathname]);
 
   return (
     <div className={`app ${isDashboardFocusMode ? 'dashboard-focus-mode' : ''}`}>
-      {!isDashboardFocusMode && <SideNav onSignIn={() => setShowSignIn(true)} />}
-      <main className={`main-content ${isDashboardFocusMode ? 'full-width' : ''}`}>
+      {showSideNav && <SideNav onSignIn={openSignIn} />}
+      <main className={`main-content ${isDashboardFocusMode || isLandingPage ? 'full-width' : ''}`}>
         <Routes>
-          <Route path="/" element={<HomeRoute />} />
-          <Route path="/home" element={<HomeRoute />} />
+          <Route path="/" element={homeElement} />
+          <Route path="/home" element={homeElement} />
           <Route 
-            path="/dashboards" 
+            path="/workspaces" 
             element={
               <ProtectedRoute>
+                <WorkspacesView />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/workspaces/:workspaceId" 
+            element={
+              <ProtectedRoute>
+                <WorkspacesPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/workspaces/:workspaceId/dashboards" 
+            element={
+              <ProtectedRoute requireSecureAuth>
                 <DashboardsPage />
               </ProtectedRoute>
             } 
@@ -213,6 +307,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <UserSettings />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/workspaces/:workspaceId/ask" 
+            element={
+              <ProtectedRoute requireAskAccess requireSecureAuth>
+                <AskPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute requiredRoles={['owner', 'bootstrap_admin']}>
+                <AdminPanel />
               </ProtectedRoute>
             } 
           />
@@ -248,7 +358,7 @@ function App() {
       {/* Sign In Modal */}
       <SignInModal 
         isOpen={showSignIn} 
-        onClose={() => setShowSignIn(false)} 
+        onClose={closeSignIn} 
       />
 
       {/* Session Warning */}

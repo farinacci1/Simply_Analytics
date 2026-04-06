@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../../store/appStore';
-import { groupApi, sfConnectionApi, folderApi } from '../../../api/apiClient';
+import { sfConnectionApi, folderApi } from '../../../api/apiClient';
+import { workspaceApi } from '../../../api/modules/workspaceApi';
 
 /**
  * @param {object} yamlBridgeRef - Ref populated by parent after useYamlExport: { pendingYamlImport, setPendingYamlImport, setImportSuccess, setImportError }
  */
 export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeRef) {
-  const { currentRole, currentDashboard, updateDashboard, isAuthenticated } = useAppStore();
+  const { currentRole, currentDashboard, updateDashboard, isAuthenticated, activeWorkspace } = useAppStore();
 
   // Store original values when modal opens for cancel/revert
   const originalValuesRef = useRef(null);
@@ -25,13 +26,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
   const [role, setRole] = useState(dashboard?.role || '');
   const [isPublished, setIsPublished] = useState(dashboard?.isPublished || false);
 
-  // Sharing state
-  const [visibility, setVisibility] = useState(dashboard?.visibility || 'private');
-  const [sharedGroups, setSharedGroups] = useState(dashboard?.sharedGroups || []);
-  const [availableGroups, setAvailableGroups] = useState([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
-  const [selectedGroupToAdd, setSelectedGroupToAdd] = useState('');
-
   // Semantic views referenced
   const [semanticViewsReferenced, setSemanticViewsReferenced] = useState(dashboard?.semanticViewsReferenced || []);
   const [selectedSemanticView, setSelectedSemanticView] = useState('');
@@ -49,13 +43,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
   const [inlineFolderName, setInlineFolderName] = useState('');
   const [creatingInlineFolder, setCreatingInlineFolder] = useState(false);
   const [folderSearchQuery, setFolderSearchQuery] = useState('');
-
-  // Access control
-  const [accessList, setAccessList] = useState(dashboard?.access || []);
-  const [newRole, setNewRole] = useState('');
-  const [groupSearchQuery, setGroupSearchQuery] = useState('');
-  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
-  const groupSearchRef = useRef(null);
 
   // Active tab
   const [activeTab, setActiveTab] = useState('general');
@@ -92,8 +79,8 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
   // Check if current user is the owner (from backend access check)
   const isOwner = dashboard?.isOwner || dashboard?.access_level === 'owner';
 
-  // Get admin roles for ownership transfer
-  const adminRoles = accessList.filter((a) => a.permission === 'admin').map((a) => a.role);
+  // Admin roles for ownership transfer (derived from dashboard access data if available)
+  const adminRoles = (dashboard?.access || []).filter((a) => a.permission === 'admin').map((a) => a.role);
 
   // State for tracking which semantic view has error (before revertToOriginal references timeout ref)
   const [semanticViewError, setSemanticViewError] = useState(null);
@@ -109,12 +96,9 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
       setWarehouse(dashboard.warehouse || '');
       setRole(dashboard.role || '');
       setIsPublished(dashboard.isPublished || false);
-      setVisibility(dashboard.visibility || 'private');
-      setSharedGroups(dashboard.sharedGroups ? [...dashboard.sharedGroups] : []);
       setSemanticViewsReferenced(dashboard.semanticViewsReferenced ? [...dashboard.semanticViewsReferenced] : []);
       setCortexAgentsEnabled(dashboard.cortexAgentsEnabled || false);
       setCortexAgents(dashboard.cortexAgents ? [...dashboard.cortexAgents] : []);
-      setAccessList(dashboard.access ? [...dashboard.access] : []);
       setFolderId(dashboard.folder_id || null);
 
       // Also cache original values for cancel/revert
@@ -123,16 +107,13 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
         description: dashboard.description || '',
         warehouse: dashboard.warehouse || '',
         isPublished: dashboard.isPublished || false,
-        visibility: dashboard.visibility || 'private',
-        sharedGroups: dashboard.sharedGroups ? [...dashboard.sharedGroups] : [],
         semanticViewsReferenced: dashboard.semanticViewsReferenced ? [...dashboard.semanticViewsReferenced] : [],
         cortexAgentsEnabled: dashboard.cortexAgentsEnabled || false,
         cortexAgents: dashboard.cortexAgents ? [...dashboard.cortexAgents] : [],
-        accessList: dashboard.access ? [...dashboard.access] : [],
         folderId: dashboard.folder_id || null,
       };
     }
-  }, [isOpen, dashboard?.id, dashboard?.access?.length, dashboard?.visibility, dashboard?.isPublished]);
+  }, [isOpen, dashboard?.id, dashboard?.isPublished]);
 
   const readYamlBridge = () => yamlBridgeRef?.current ?? {};
 
@@ -143,20 +124,15 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
       setDescription(originalValuesRef.current.description);
       setWarehouse(originalValuesRef.current.warehouse);
       setIsPublished(originalValuesRef.current.isPublished);
-      setVisibility(originalValuesRef.current.visibility);
-      setSharedGroups([...originalValuesRef.current.sharedGroups]);
       setSemanticViewsReferenced([...originalValuesRef.current.semanticViewsReferenced]);
       setCortexAgentsEnabled(originalValuesRef.current.cortexAgentsEnabled);
       setCortexAgents([...originalValuesRef.current.cortexAgents]);
-      setAccessList([...originalValuesRef.current.accessList]);
       setFolderId(originalValuesRef.current.folderId);
     }
     // Clear temporary states
     setError(null);
-    setNewRole('');
     setSelectedSemanticView('');
     setSelectedCortexAgent('');
-    setSelectedGroupToAdd('');
     setShowTransferConfirm(false);
     setTransferOwnerTo('');
     setShowCredentialUpdate(false);
@@ -186,17 +162,56 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     onClose();
   };
 
+  // Role/warehouse always come from the connection — they are read-only
+  const connectionInherited = true;
+
   // Load resources from the dashboard's connection
   const loadResourcesFromConnection = async () => {
-    if (!dashboard?.connection_id || !dashboard?.role) return;
+    if (!dashboard?.connection_id) return;
 
     setLoadingResources(true);
     try {
-      const resources = await sfConnectionApi.getResources(dashboard.connection_id, dashboard.role);
-      setAvailableWarehouses(resources.warehouses || []);
-      setAvailableRoles(resources.roles || []);
-      setAvailableSemanticViews(resources.semanticViews || []);
-      setAvailableCortexAgents(resources.cortexAgents || []);
+      const parseFqn = (fqn) => {
+        const parts = (fqn || '').split('.');
+        return {
+          name: parts.length > 0 ? parts[parts.length - 1] : fqn,
+          database: parts.length >= 3 ? parts[0] : undefined,
+          schema: parts.length >= 3 ? parts[1] : undefined,
+          fullyQualifiedName: fqn,
+        };
+      };
+
+      const wsId = activeWorkspace?.id || dashboard?.workspace_id;
+      if (wsId) {
+        // Workspace mode: role, warehouse, views, agents all come from workspace connection
+        const wsDetail = await workspaceApi.get(wsId);
+        const wsConnections = wsDetail?.connections || [];
+        const wsConn = wsConnections.find(wc => wc.connection_id === dashboard.connection_id);
+
+        if (wsConn) {
+          if (wsConn.role) setRole(wsConn.role);
+          if (wsConn.warehouse) setWarehouse(wsConn.warehouse);
+
+          setAvailableSemanticViews(
+            (wsDetail?.semanticViews || [])
+              .filter(v => v.workspace_connection_id === wsConn.id)
+              .map(v => parseFqn(v.semantic_view_fqn))
+          );
+          setAvailableCortexAgents(
+            (wsDetail?.agents || [])
+              .filter(a => a.workspace_connection_id === wsConn.id)
+              .map(a => parseFqn(a.agent_fqn))
+          );
+        } else {
+          setAvailableSemanticViews([]);
+          setAvailableCortexAgents([]);
+        }
+      } else if (dashboard.role) {
+        // No workspace — semantic views/agents from Snowflake, role/warehouse stay as-is from dashboard
+        const resources = await sfConnectionApi.getResources(dashboard.connection_id, dashboard.role);
+        setAvailableSemanticViews(resources.semanticViews || []);
+        setAvailableCortexAgents(resources.cortexAgents || []);
+      }
     } catch (err) {
       console.error('Failed to load resources:', err);
     } finally {
@@ -207,7 +222,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
   useEffect(() => {
     if (isOpen && isAuthenticated) {
       loadResourcesFromConnection();
-      loadAvailableGroups();
       loadFolders();
     }
   }, [isOpen, isAuthenticated, dashboard?.connection_id, dashboard?.role]);
@@ -219,7 +233,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
       setWarehouse(dashboard.warehouse || '');
       setRole(dashboard.role || '');
       setIsPublished(dashboard.isPublished || false);
-      setAccessList(dashboard.access || []);
       setSemanticViewsReferenced(dashboard.semanticViewsReferenced || []);
       setCortexAgentsEnabled(dashboard.cortexAgentsEnabled || false);
       setCortexAgents(dashboard.cortexAgents || []);
@@ -363,35 +376,81 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     }
   };
 
-  // Load available connections for replacement
+  // Load workspace connections for replacement (not raw Snowflake connections)
   const loadAvailableConnections = async () => {
     setLoadingConnections(true);
     try {
-      const connections = await sfConnectionApi.list();
-      setAvailableConnections(connections || []);
+      const wsId = activeWorkspace?.id || dashboard?.workspace_id;
+      if (!wsId) {
+        setAvailableConnections([]);
+        return;
+      }
+      const wsDetail = await workspaceApi.get(wsId);
+      const wsConnections = wsDetail?.connections || [];
+      const wsViews = wsDetail?.semanticViews || [];
+      const wsAgents = wsDetail?.agents || [];
+
+      // Enrich each connection with its assigned views/agents for compatibility checking
+      const enriched = wsConnections.map(wc => ({
+        ...wc,
+        views: wsViews.filter(v => v.workspace_connection_id === wc.id).map(v => v.semantic_view_fqn),
+        agents: wsAgents.filter(a => a.workspace_connection_id === wc.id).map(a => a.agent_fqn),
+      }));
+      setAvailableConnections(enriched);
     } catch (error) {
-      console.error('Failed to load connections:', error);
+      console.error('Failed to load workspace connections:', error);
       setAvailableConnections([]);
     } finally {
       setLoadingConnections(false);
     }
   };
 
-  // Handle replace connection
+  // Handle replace connection — verify semantic view/agent compatibility first
   const handleReplaceConnection = async () => {
-    if (!selectedConnectionId || selectedConnectionId === dashboard?.connection_id) {
+    if (!selectedConnectionId || !availableConnections.length) return;
+
+    const target = availableConnections.find(c => c.id === selectedConnectionId);
+    if (!target) return;
+
+    // Check that the new connection covers the dashboard's referenced semantic views
+    const dashViews = (dashboard?.semanticViewsReferenced || []).map(v =>
+      (typeof v === 'string' ? v : v.fullyQualifiedName || v.name || '').toUpperCase()
+    ).filter(Boolean);
+
+    const targetViewsUpper = (target.views || []).map(fqn => fqn.toUpperCase());
+
+    const missingViews = dashViews.filter(fqn => !targetViewsUpper.includes(fqn));
+    if (missingViews.length > 0) {
+      setError(`Cannot switch — the target connection is missing semantic view(s): ${missingViews.join(', ')}`);
       return;
     }
 
-    // Update the dashboard with the new connection
-    const selectedConn = availableConnections.find((c) => c.id === selectedConnectionId);
-    if (selectedConn) {
-      updateDashboard(currentDashboard.id, {
-        connection_id: selectedConnectionId,
-        connection_name: selectedConn.name,
+    // Check cortex agents if enabled
+    if (dashboard?.cortexAgentsEnabled) {
+      const dashAgents = (dashboard?.cortexAgents || []).map(a =>
+        (typeof a === 'string' ? a : a.fullyQualifiedName || '').toUpperCase()
+      ).filter(Boolean);
+
+      const targetAgentsUpper = (target.agents || []).map(fqn => fqn.toUpperCase());
+      const missingAgents = dashAgents.filter(fqn => !targetAgentsUpper.includes(fqn));
+      if (missingAgents.length > 0) {
+        setError(`Cannot switch — the target connection is missing agent(s): ${missingAgents.join(', ')}`);
+        return;
+      }
+    }
+
+    try {
+      await updateDashboard(currentDashboard.id, {
+        connection_id: target.connection_id,
+        connection_name: target.connection_name,
+        warehouse: target.warehouse,
+        role: target.role,
       });
       setShowReplaceConnection(false);
       setSelectedConnectionId(null);
+      setError(null);
+    } catch (err) {
+      setError('Failed to replace connection: ' + err.message);
     }
   };
 
@@ -408,23 +467,10 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     }
   }, [showConnectionMenu]);
 
-  // Load available groups
-  const loadAvailableGroups = async () => {
-    setLoadingGroups(true);
-    try {
-      const response = await groupApi.getAll();
-      setAvailableGroups(response.groups || []);
-    } catch (err) {
-      console.error('Failed to load groups:', err);
-    } finally {
-      setLoadingGroups(false);
-    }
-  };
-
-  // Load folders
   const loadFolders = async () => {
     try {
-      const response = await folderApi.getContents(null);
+      const wsId = activeWorkspace?.id || dashboard?.workspace_id;
+      const response = await folderApi.getContents(null, wsId);
       setFolders(response.folders || []);
     } catch (err) {
       console.error('Failed to load folders:', err);
@@ -437,9 +483,11 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
 
     setCreatingInlineFolder(true);
     try {
+      const wsId = activeWorkspace?.id || dashboard?.workspace_id;
       const newFolder = await folderApi.create({
         name: inlineFolderName.trim(),
         parentId: null,
+        workspaceId: wsId,
       });
       // API returns folder directly, not wrapped
       setFolders([...folders, newFolder]);
@@ -453,22 +501,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     } finally {
       setCreatingInlineFolder(false);
     }
-  };
-
-  // Add group to shared list
-  const handleAddGroup = () => {
-    if (!selectedGroupToAdd) return;
-
-    const group = availableGroups.find((g) => g.id === selectedGroupToAdd);
-    if (group && !sharedGroups.find((g) => g.id === group.id)) {
-      setSharedGroups([...sharedGroups, group]);
-    }
-    setSelectedGroupToAdd('');
-  };
-
-  // Remove group from shared list
-  const handleRemoveGroup = (groupId) => {
-    setSharedGroups(sharedGroups.filter((g) => g.id !== groupId));
   };
 
   // Transfer ownership
@@ -545,8 +577,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
         warehouse,
         role,
         isPublished,
-        visibility,
-        access: accessList,
         semanticViewsReferenced,
         cortexAgentsEnabled,
         cortexAgents: cortexAgentsEnabled ? cortexAgents : [],
@@ -576,61 +606,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     }
   };
 
-  // Filtered groups for the searchable dropdown
-  const filteredGroupsForAccess = useMemo(() => {
-    return availableGroups
-      .filter((g) => !accessList.some((a) => a.groupId === g.id)) // Exclude already added
-      .filter((g) => g.name.toLowerCase().includes(groupSearchQuery.toLowerCase())); // Search filter
-  }, [availableGroups, accessList, groupSearchQuery]);
-
-  const selectGroupForAccess = (group) => {
-    setNewRole(group.id);
-    setGroupSearchQuery(group.name);
-    setShowGroupDropdown(false);
-  };
-
-  const addAccessRole = () => {
-    if (!newRole) return;
-
-    // Find the selected group
-    const selectedGroup = availableGroups.find((g) => g.id === newRole);
-    if (!selectedGroup) return;
-
-    // Check if group is already in the list
-    if (accessList.some((a) => a.groupId === newRole)) {
-      setError('This group already has access');
-      return;
-    }
-
-    // Groups just grant access - no permission level
-    // User's app role determines what they can do
-    setAccessList([
-      ...accessList,
-      {
-        groupId: selectedGroup.id,
-        groupName: selectedGroup.name,
-      },
-    ]);
-    setNewRole('');
-    setGroupSearchQuery('');
-    setError(null);
-  };
-
-  // Close group dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (groupSearchRef.current && !groupSearchRef.current.contains(e.target)) {
-        setShowGroupDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const removeAccessRole = (groupId) => {
-    setAccessList(accessList.filter((a) => (a.groupId || a.role) !== groupId));
-  };
-
   return {
     currentRole,
     currentDashboard,
@@ -657,16 +632,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     setRole,
     isPublished,
     setIsPublished,
-    visibility,
-    setVisibility,
-    sharedGroups,
-    setSharedGroups,
-    availableGroups,
-    setAvailableGroups,
-    loadingGroups,
-    setLoadingGroups,
-    selectedGroupToAdd,
-    setSelectedGroupToAdd,
     semanticViewsReferenced,
     setSemanticViewsReferenced,
     selectedSemanticView,
@@ -691,15 +656,6 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     setCreatingInlineFolder,
     folderSearchQuery,
     setFolderSearchQuery,
-    accessList,
-    setAccessList,
-    newRole,
-    setNewRole,
-    groupSearchQuery,
-    setGroupSearchQuery,
-    showGroupDropdown,
-    setShowGroupDropdown,
-    groupSearchRef,
     activeTab,
     setActiveTab,
     isSaving,
@@ -755,17 +711,11 @@ export function useSettingsState(dashboard, isOpen, onClose, onSave, yamlBridgeR
     testConnection,
     loadAvailableConnections,
     handleReplaceConnection,
-    loadAvailableGroups,
     loadFolders,
     handleInlineCreateFolder,
-    handleAddGroup,
-    handleRemoveGroup,
     handleTransferOwnership,
     handleUpdateCredentials,
     handleSave,
-    filteredGroupsForAccess,
-    selectGroupForAccess,
-    addAccessRole,
-    removeAccessRole,
+    connectionInherited,
   };
 }

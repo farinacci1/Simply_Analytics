@@ -8,8 +8,11 @@ import { ROLE_LABELS, ROLE_COLORS } from '../constants';
 
 export const CreateUserModal = ({
   formData, setFormData, formError, formLoading,
-  onSubmit, onClose, assignableRoles,
-}) => (
+  onSubmit, onClose, assignableRoles, passwordPolicy,
+}) => {
+  const pp = passwordPolicy || { minLength: 14, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecial: true };
+  const hints = [`${pp.minLength}+ chars`, pp.requireUppercase && 'uppercase', pp.requireLowercase && 'lowercase', pp.requireNumber && 'number', pp.requireSpecial && 'special char'].filter(Boolean).join(', ');
+  return (
   <div className="modal-overlay">
     <div className="modal" onClick={e => e.stopPropagation()}>
       <div className="modal-header">
@@ -33,7 +36,8 @@ export const CreateUserModal = ({
           </div>
           <div className="form-group">
             <label>Password *</label>
-            <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required minLength={8} />
+            <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required minLength={pp.minLength} />
+            <span className="field-hint">{hints}</span>
           </div>
           <div className="form-group">
             <label>Role *</label>
@@ -51,12 +55,16 @@ export const CreateUserModal = ({
       </form>
     </div>
   </div>
-);
+  );
+};
 
 export const EditUserModal = ({
   formData, setFormData, formError, formLoading,
-  selectedUser, currentUser, onSubmit, onClose,
-}) => (
+  selectedUser, currentUser, onSubmit, onClose, passwordPolicy,
+}) => {
+  const pp = passwordPolicy || { minLength: 14, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecial: true };
+  const hints = [`${pp.minLength}+ chars`, pp.requireUppercase && 'uppercase', pp.requireLowercase && 'lowercase', pp.requireNumber && 'number', pp.requireSpecial && 'special char'].filter(Boolean).join(', ');
+  return (
   <div className="modal-overlay">
     <div className="modal" onClick={e => e.stopPropagation()}>
       <div className="modal-header">
@@ -83,8 +91,8 @@ export const EditUserModal = ({
           {selectedUser.username !== currentUser && (
             <div className="form-group">
               <label>New Password (leave blank to keep current)</label>
-              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Enter new password..." minLength={14} />
-              <span className="field-hint">Min 14 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char</span>
+              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Enter new password..." minLength={pp.minLength} />
+              <span className="field-hint">{hints}</span>
             </div>
           )}
         </div>
@@ -97,7 +105,8 @@ export const EditUserModal = ({
       </form>
     </div>
   </div>
-);
+  );
+};
 
 export const TransferOwnershipModal = ({
   targetUser, confirmText, setConfirmText,

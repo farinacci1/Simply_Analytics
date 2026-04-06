@@ -1,4 +1,4 @@
-import { dashboardApi, connectionApi, persistLastDashboard } from '../../api/apiClient';
+import { dashboardApi, connectionApi } from '../../api/apiClient';
 import { log } from '../storeUtils';
 
 export const createDashboardSlice = (set, get) => ({
@@ -32,8 +32,6 @@ export const createDashboardSlice = (set, get) => ({
     }
   },
 
-  checkHasUnsavedChanges: () => get().hasUnsavedChanges,
-  
   clearUnsavedChanges: () => set({ 
     hasUnsavedChanges: false, 
     currentDashboard: null,
@@ -57,9 +55,16 @@ export const createDashboardSlice = (set, get) => ({
   clearDashboardFilters: () => set({ dashboardFilters: {} }),
 
   loadDashboards: async () => {
+    const { activeWorkspace } = get();
+    const wsId = activeWorkspace?.id || null;
     set({ isLoadingDashboards: true, dashboardLoadError: null });
     try {
-      const data = await dashboardApi.list();
+      const params = wsId ? { workspaceId: wsId } : {};
+      const data = await dashboardApi.list(params);
+
+      // Discard result if workspace changed while fetching
+      if (get().activeWorkspace?.id !== wsId) return [];
+
       const dashboards = (data.dashboards || []).map(d => ({
         ...d,
         title: d.title || d.name,
@@ -69,6 +74,9 @@ export const createDashboardSlice = (set, get) => ({
       set({ dashboards, isLoadingDashboards: false, dashboardLoadError: null });
       return dashboards;
     } catch (error) {
+      // Discard error if workspace changed while fetching
+      if (get().activeWorkspace?.id !== wsId) return [];
+
       console.error('Failed to load dashboards:', error);
       if (error.code === 'MFA_REQUIRED') {
         set({ 
@@ -225,11 +233,11 @@ export const createDashboardSlice = (set, get) => ({
 
   addWidget: (dashboardId, widget) => {
     const { currentTabId, currentUser, currentRole } = get();
-    const creator = currentUser || currentRole || 'unknown';
+    const creator = currentUser?.username || currentRole || 'unknown';
     const newWidget = { 
       ...widget, 
       id: `w-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      creator: creator,
+      creator,
       createdAt: new Date().toISOString(),
       lastUpdatedBy: creator,
       lastUpdatedAt: new Date().toISOString(),
@@ -251,7 +259,7 @@ export const createDashboardSlice = (set, get) => ({
 
   updateWidget: (dashboardId, widgetId, updates, options = {}) => {
     const { currentTabId, currentUser, currentRole } = get();
-    const lastUpdatedBy = currentUser || currentRole || 'unknown';
+    const lastUpdatedBy = currentUser?.username || currentRole || 'unknown';
     const markDirty = !options.silent;
     set((state) => {
       const newTabs = state.currentDashboard.tabs.map(tab => {
@@ -549,102 +557,4 @@ export const createDashboardSlice = (set, get) => ({
     return newTab;
   },
 
-  // YAML import/export for dashboards
-  exportDashboardToYaml: async (dashboardId) => {
-    const { currentDashboard } = get();
-    const id = dashboardId || currentDashboard?.id;
-    
-    if (!id) return null;
-    
-    try {
-      return await dashboardApi.exportYaml(id);
-    } catch (error) {
-      console.error('Export failed:', error);
-      return null;
-    }
-  },
-
-  importDashboardFromYaml: async (yamlString) => {
-    try {
-      const yaml = await import('js-yaml');
-      const parsed = yaml.load(yamlString);
-      
-      if (!parsed) throw new Error('Empty or invalid YAML');
-
-      const db = parsed.dashboard || parsed;
-      const name = db.title || db.name;
-      if (!name) throw new Error('Invalid dashboard YAML — title or name is required');
-
-      const calcFieldsById = new Map();
-      (db.semanticViewsReferenced || []).forEach(sv => {
-        (sv.calculatedFields || []).forEach(cf => {
-          if (cf.id) calcFieldsById.set(cf.id, cf);
-        });
-      });
-
-      const tabs = (db.tabs || []).map(tab => ({
-        ...tab,
-        backgroundColor: tab.tabColor || tab.backgroundColor || null,
-        widgets: (tab.widgets || []).map(w => ({
-          ...w,
-          customColumns: (w.customColumnIds || [])
-            .map(id => calcFieldsById.get(id))
-            .filter(Boolean),
-        })),
-      }));
-
-      const dashboard = {
-        id: db.id || `dashboard-${Date.now()}`,
-        name,
-        title: name,
-        description: db.description || '',
-        warehouse: db.warehouse || null,
-        isPublished: db.isPublished || false,
-        tabs,
-        filters: db.filters || [],
-        globalFilterFields: db.globalFilterFields || [],
-        semanticViewsReferenced: db.semanticViewsReferenced || [],
-        cortexAgentsEnabled: db.cortexAgentsEnabled || false,
-        cortexAgents: db.cortexAgents || [],
-        customColorSchemes: db.customColorSchemes || [],
-      };
-      
-      set((state) => ({
-        dashboards: [...state.dashboards, { 
-          id: dashboard.id, 
-          name: dashboard.name, 
-          tabCount: dashboard.tabs.length,
-        }],
-        currentDashboard: dashboard,
-        currentTabId: dashboard.tabs[0]?.id,
-      }));
-      
-      return dashboard;
-    } catch (error) {
-      console.error('Failed to import dashboard from YAML:', error);
-      throw error;
-    }
-  },
-
-  validateDashboardYaml: async (yamlString) => {
-    try {
-      const yaml = await import('js-yaml');
-      const parsed = yaml.load(yamlString);
-      const errors = [];
-
-      const db = parsed?.dashboard || parsed;
-      if (!db?.title && !db?.name) errors.push('Dashboard title or name is required');
-
-      const tabs = db?.tabs || [];
-      tabs.forEach((tab, ti) => {
-        (tab.widgets || []).forEach((widget, wi) => {
-          if (!widget.type) errors.push(`Tab ${ti + 1}, Widget ${wi + 1}: type is required`);
-        });
-      });
-
-      return { valid: errors.length === 0, errors };
-    } catch (error) {
-      return { valid: false, errors: [error.message] };
-    }
-  },
 });

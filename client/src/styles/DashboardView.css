@@ -1113,6 +1113,60 @@
   transition: none !important;
 }
 
+/* ─── Presentation Mode (View Mode) ─────────────────────── */
+/* CSS overrides GridStack's inline absolute positioning.
+   Grid placement uses CSS custom properties (--gs-x/y/w/h) set by React. */
+
+.widgets-grid.pres-mode {
+  display: grid !important;
+  grid-template-columns: repeat(12, 1fr) !important;
+  grid-auto-rows: 80px !important;
+  gap: 16px !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.widgets-grid.pres-mode > .grid-stack-item {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  inset: auto !important;
+  transition: none !important;
+  grid-column: calc(var(--gs-x) + 1) / span var(--gs-w) !important;
+  grid-row: calc(var(--gs-y) + 1) / span var(--gs-h) !important;
+}
+
+@media (max-width: 1400px) {
+  .widgets-grid.pres-mode {
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .widgets-grid.pres-mode {
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 12px !important;
+  }
+  .widgets-grid.pres-mode > .grid-stack-item {
+    grid-column-start: auto !important;
+    grid-row-start: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .widgets-grid.pres-mode {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .widgets-grid.pres-mode > .grid-stack-item {
+    grid-column: 1 / -1 !important;
+    grid-row-start: auto !important;
+  }
+}
+
 /* Adaptive Layout Mode - fills entire canvas */
 .widgets-grid.layout-adaptive {
   display: grid;

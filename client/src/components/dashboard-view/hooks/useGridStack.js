@@ -5,6 +5,10 @@ import { useAppStore } from '../../../store/appStore';
 /**
  * Manages GridStack initialization, widget registration, and layout event handling.
  *
+ * View mode layout is handled entirely by CSS (.pres-mode class + CSS custom properties
+ * on each widget element). This hook never touches inline styles for mode switching —
+ * it only toggles GridStack's static mode.
+ *
  * @param {Object} opts
  * @param {boolean} opts.isEditMode
  * @param {Array}   opts.currentWidgets
@@ -155,7 +159,7 @@ export function useGridStack({
     return () => cancelAnimationFrame(frameId);
   }, [currentWidgets, isEditMode, dashboardConnectionError]);
 
-  // Update GridStack when edit mode changes
+  // Toggle static mode when switching between edit and view
   useEffect(() => {
     if (!gridRef.current) return;
     gridRef.current.setStatic(!isEditMode);

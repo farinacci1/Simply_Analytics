@@ -1,40 +1,82 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FiUsers, FiUserPlus, FiEdit2, FiTrash2, FiShield,
-  FiSearch, FiLoader, FiPlus, FiUserMinus, FiFolder, FiX,
+  FiSearch, FiLoader, FiPlus, FiUserMinus, FiLayers, FiX,
 } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import { useToast } from '../components/Toast';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { workspaceApi } from '../api/modules/workspaceApi.js';
 import '../styles/UsersManagement.css';
 
 import { ROLE_LABELS, ROLE_COLORS } from '../components/users-management/constants';
 import UserRow from '../components/users-management/components/UserRow';
 import { useUserManagement } from '../components/users-management/hooks/useUserManagement';
-import { useGroupManagement } from '../components/users-management/hooks/useGroupManagement';
 import {
   CreateUserModal, EditUserModal, TransferOwnershipModal,
   LockConfirmModal, UnlockAccountModal, MfaBypassModal,
   ResetMfaConfirmModal, TransferDashboardsModal,
 } from '../components/users-management/components/UserModals';
-import {
-  CreateGroupModal, EditGroupModal, AddMemberModal, RemoveMemberConfirmModal,
-} from '../components/users-management/components/GroupModals';
 
 const UsersManagement = () => {
-  const { currentUser, currentRole } = useAppStore();
+  const { currentUser, currentRole, workspaces, loadWorkspaces } = useAppStore();
   const toast = useToast();
-  const [activeTab, setActiveTab] = React.useState('users');
+  const [activeTab, setActiveTab] = useState('users');
 
-  const um = useUserManagement(currentUser, currentRole, toast);
-  const gm = useGroupManagement(toast);
+  const um = useUserManagement(currentUser?.username, currentRole, toast);
 
   const canManageUsers = ['owner', 'admin'].includes(currentRole);
   const canCreateUsers = ['owner', 'admin'].includes(currentRole);
-  const canManageGroups = ['owner', 'admin'].includes(currentRole);
+  const canManageWorkspaces = ['owner', 'admin'].includes(currentRole);
 
-  const availableUsersForGroup = um.users.filter(user =>
-    !gm.groupMembers.some(member => member.id === user.id)
+  // Workspace members management state
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
+  const [wsMembers, setWsMembers] = useState([]);
+  const [wsMembersLoading, setWsMembersLoading] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [selectedUserToAdd, setSelectedUserToAdd] = useState('');
+
+  useEffect(() => { loadWorkspaces(); }, []);
+
+  const handleSelectWorkspace = useCallback(async (ws) => {
+    setSelectedWorkspace(ws);
+    setWsMembersLoading(true);
+    try {
+      const data = await workspaceApi.getMembers(ws.id);
+      setWsMembers(data.members || []);
+    } catch (err) {
+      toast.error('Failed to load members: ' + err.message);
+    } finally {
+      setWsMembersLoading(false);
+    }
+  }, [toast]);
+
+  const handleAddMember = useCallback(async () => {
+    if (!selectedUserToAdd || !selectedWorkspace) return;
+    try {
+      const data = await workspaceApi.addMember(selectedWorkspace.id, selectedUserToAdd);
+      setWsMembers(data.members || []);
+      setShowAddMemberModal(false);
+      setSelectedUserToAdd('');
+      toast.success('Member added');
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }, [selectedUserToAdd, selectedWorkspace, toast]);
+
+  const handleRemoveMember = useCallback(async (userId) => {
+    if (!selectedWorkspace) return;
+    try {
+      await workspaceApi.removeMember(selectedWorkspace.id, userId);
+      setWsMembers(prev => prev.filter(m => m.id !== userId));
+      toast.success('Member removed');
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }, [selectedWorkspace, toast]);
+
+  const availableUsersForWorkspace = um.users.filter(user =>
+    !wsMembers.some(member => member.id === user.id)
   );
 
   if (!canManageUsers) {
@@ -56,7 +98,7 @@ const UsersManagement = () => {
           <FiUsers className="header-icon" />
           <div>
             <h1>User Management</h1>
-            <p>{um.users.length} users, {gm.groups.length} groups</p>
+            <p>{um.users.length} users, {workspaces.length} workspaces</p>
           </div>
         </div>
       </div>
@@ -65,8 +107,8 @@ const UsersManagement = () => {
         <button className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
           <FiUsers /> Users
         </button>
-        <button className={`tab-btn ${activeTab === 'groups' ? 'active' : ''}`} onClick={() => setActiveTab('groups')}>
-          <FiFolder /> Groups
+        <button className={`tab-btn ${activeTab === 'workspaces' ? 'active' : ''}`} onClick={() => setActiveTab('workspaces')}>
+          <FiLayers /> Workspaces
         </button>
       </div>
 
@@ -108,7 +150,7 @@ const UsersManagement = () => {
                     <UserRow
                       key={user.id}
                       user={user}
-                      currentUser={currentUser}
+                      currentUser={currentUser?.username}
                       currentRole={currentRole}
                       canManageUsers={canManageUsers}
                       canDelete={um.canDeleteUser(user)}
@@ -130,42 +172,32 @@ const UsersManagement = () => {
         </div>
       )}
 
-      {/* Groups Tab */}
-      {activeTab === 'groups' && (
+      {/* Workspace Members Tab */}
+      {activeTab === 'workspaces' && (
         <div className="tab-content groups-tab">
-          {!canManageGroups ? (
-            <div className="access-notice"><FiShield /><p>Only admins can manage groups.</p></div>
+          {!canManageWorkspaces ? (
+            <div className="access-notice"><FiShield /><p>Only admins can manage workspace members.</p></div>
           ) : (
             <div className="groups-layout">
               <div className="groups-list-panel">
                 <div className="panel-header">
-                  <h3>Groups</h3>
-                  <button className="btn-primary btn-sm" onClick={() => gm.setShowCreateGroupModal(true)}>
-                    <FiPlus /> New Group
-                  </button>
+                  <h3>Workspaces</h3>
                 </div>
 
-                {gm.groupsLoading ? (
-                  <div className="loading-state"><FiLoader className="spinner" /></div>
-                ) : gm.groups.length === 0 ? (
+                {workspaces.length === 0 ? (
                   <div className="empty-groups">
-                    <FiFolder size={32} /><p>No groups yet</p>
-                    <button className="btn-primary btn-sm" onClick={() => gm.setShowCreateGroupModal(true)}>Create First Group</button>
+                    <FiLayers size={32} /><p>No workspaces yet</p>
                   </div>
                 ) : (
                   <div className="groups-list">
-                    {gm.groups.map(group => (
-                      <div key={group.id} className={`group-item ${gm.selectedGroup?.id === group.id ? 'selected' : ''}`} onClick={() => gm.handleSelectGroup(group)}>
+                    {workspaces.map(ws => (
+                      <div key={ws.id} className={`group-item ${selectedWorkspace?.id === ws.id ? 'selected' : ''}`} onClick={() => handleSelectWorkspace(ws)}>
                         <div className="group-info">
-                          <div className="group-icon"><FiFolder /></div>
+                          <div className="group-icon"><FiLayers /></div>
                           <div>
-                            <div className="group-name">{group.name}</div>
-                            <div className="group-meta">{group.member_count || 0} members</div>
+                            <div className="group-name">{ws.name}</div>
+                            <div className="group-meta">{ws.member_count || 0} members</div>
                           </div>
-                        </div>
-                        <div className="group-actions">
-                          <button className="action-btn-sm" onClick={(e) => { e.stopPropagation(); gm.openEditGroupModal(group); }} title="Edit Group"><FiEdit2 /></button>
-                          <button className="action-btn-sm danger" onClick={(e) => { e.stopPropagation(); gm.setGroupToDelete(group); }} title="Delete Group"><FiTrash2 /></button>
                         </div>
                       </div>
                     ))}
@@ -174,30 +206,30 @@ const UsersManagement = () => {
               </div>
 
               <div className="group-members-panel">
-                {!gm.selectedGroup ? (
-                  <div className="no-selection"><FiUsers size={40} /><p>Select a group to manage members</p></div>
+                {!selectedWorkspace ? (
+                  <div className="no-selection"><FiUsers size={40} /><p>Select a workspace to manage members</p></div>
                 ) : (
                   <>
                     <div className="panel-header">
                       <div>
-                        <h3>{gm.selectedGroup.name}</h3>
-                        {gm.selectedGroup.description && <p className="group-description">{gm.selectedGroup.description}</p>}
+                        <h3>{selectedWorkspace.name}</h3>
+                        {selectedWorkspace.description && <p className="group-description">{selectedWorkspace.description}</p>}
                       </div>
-                      <button className="btn-primary btn-sm" onClick={() => gm.setShowAddMemberModal(true)}>
+                      <button className="btn-primary btn-sm" onClick={() => setShowAddMemberModal(true)}>
                         <FiUserPlus /> Add Member
                       </button>
                     </div>
 
-                    {gm.groupMembersLoading ? (
+                    {wsMembersLoading ? (
                       <div className="loading-state"><FiLoader className="spinner" /></div>
-                    ) : gm.groupMembers.length === 0 ? (
+                    ) : wsMembers.length === 0 ? (
                       <div className="empty-members">
-                        <FiUsers size={32} /><p>No members in this group</p>
-                        <button className="btn-primary btn-sm" onClick={() => gm.setShowAddMemberModal(true)}>Add First Member</button>
+                        <FiUsers size={32} /><p>No members in this workspace</p>
+                        <button className="btn-primary btn-sm" onClick={() => setShowAddMemberModal(true)}>Add First Member</button>
                       </div>
                     ) : (
                       <div className="members-list">
-                        {gm.groupMembers.map(member => (
+                        {wsMembers.map(member => (
                           <div key={member.id} className="member-item">
                             <div className="member-info">
                               <div className="user-avatar">{(member.display_name || member.username || '?')[0].toUpperCase()}</div>
@@ -207,7 +239,7 @@ const UsersManagement = () => {
                               </div>
                             </div>
                             <span className="role-badge" style={{ backgroundColor: ROLE_COLORS[member.role] }}>{ROLE_LABELS[member.role]}</span>
-                            <button className="remove-member-btn" onClick={() => gm.handleRemoveMember(member.id)} title="Remove from group"><FiUserMinus /></button>
+                            <button className="remove-member-btn" onClick={() => handleRemoveMember(member.id)} title="Remove from workspace"><FiUserMinus /></button>
                           </div>
                         ))}
                       </div>
@@ -227,6 +259,7 @@ const UsersManagement = () => {
           formError={um.formError} formLoading={um.formLoading}
           onSubmit={um.handleCreateUser} onClose={() => um.setShowCreateModal(false)}
           assignableRoles={um.getAssignableRoles()}
+          passwordPolicy={um.passwordPolicy}
         />
       )}
 
@@ -234,8 +267,9 @@ const UsersManagement = () => {
         <EditUserModal
           formData={um.formData} setFormData={um.setFormData}
           formError={um.formError} formLoading={um.formLoading}
-          selectedUser={um.selectedUser} currentUser={currentUser}
+          selectedUser={um.selectedUser} currentUser={currentUser?.username}
           onSubmit={um.handleEditUser} onClose={() => um.setShowEditModal(false)}
+          passwordPolicy={um.passwordPolicy}
         />
       )}
 
@@ -292,42 +326,31 @@ const UsersManagement = () => {
         />
       )}
 
-      {/* Group Modals */}
-      {gm.showCreateGroupModal && (
-        <CreateGroupModal
-          groupFormData={gm.groupFormData} setGroupFormData={gm.setGroupFormData}
-          formError={gm.formError} formLoading={gm.formLoading}
-          isGroupNameTaken={gm.isGroupNameTaken}
-          onSubmit={gm.handleCreateGroup} onClose={gm.closeCreateGroupModal}
-        />
-      )}
-
-      {gm.showEditGroupModal && gm.selectedGroup && (
-        <EditGroupModal
-          selectedGroup={gm.selectedGroup}
-          groupFormData={gm.groupFormData} setGroupFormData={gm.setGroupFormData}
-          formError={gm.formError} formLoading={gm.formLoading}
-          isGroupNameTaken={gm.isGroupNameTaken}
-          onSubmit={gm.handleUpdateGroup} onClose={gm.closeEditGroupModal}
-        />
-      )}
-
-      {gm.showAddMemberModal && gm.selectedGroup && (
-        <AddMemberModal
-          selectedGroup={gm.selectedGroup}
-          availableUsers={availableUsersForGroup}
-          selectedUserToAdd={gm.selectedUserToAdd} setSelectedUserToAdd={gm.setSelectedUserToAdd}
-          onAdd={gm.handleAddMember} onClose={() => gm.setShowAddMemberModal(false)}
-        />
-      )}
-
-      {gm.memberToRemove && (
-        <RemoveMemberConfirmModal onConfirm={gm.confirmRemoveMember} onClose={() => gm.setMemberToRemove(null)} />
-      )}
-
-      {/* Delete confirmations */}
-      {gm.groupToDelete && (
-        <ConfirmDeleteModal itemName={gm.groupToDelete.name} itemType="group" onConfirm={gm.handleDeleteGroup} onCancel={() => gm.setGroupToDelete(null)} />
+      {/* Workspace Add Member Modal */}
+      {showAddMemberModal && selectedWorkspace && (
+        <div className="modal-overlay" onClick={() => setShowAddMemberModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add Member to {selectedWorkspace.name}</h2>
+              <button className="modal-close" onClick={() => setShowAddMemberModal(false)}><FiX /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Select User</label>
+                <select value={selectedUserToAdd} onChange={e => setSelectedUserToAdd(e.target.value)}>
+                  <option value="">-- Select a user --</option>
+                  {availableUsersForWorkspace.map(u => (
+                    <option key={u.id} value={u.id}>{u.display_name || u.username} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn secondary" onClick={() => setShowAddMemberModal(false)}>Cancel</button>
+              <button className="modal-btn primary" onClick={handleAddMember} disabled={!selectedUserToAdd}>Add Member</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {um.userToDelete && !um.showTransferDashboardsModal && (

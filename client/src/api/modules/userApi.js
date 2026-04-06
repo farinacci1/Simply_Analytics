@@ -1,5 +1,11 @@
 import { fetchApi, safeJson } from './fetchCore.js';
 
+function throwApiError(data, fallback) {
+  const err = new Error(data.error || fallback);
+  if (data.code) err.code = data.code;
+  throw err;
+}
+
 export const userApi = {
   async getAll() {
     const res = await fetchApi('/users');
@@ -17,8 +23,7 @@ export const userApi = {
       body: JSON.stringify(userData),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to create user' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to create user' }), 'Failed to create user');
     }
     return safeJson(res, { user: null });
   },
@@ -29,8 +34,7 @@ export const userApi = {
       body: JSON.stringify(updates),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to update user' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to update user' }), 'Failed to update user');
     }
     return safeJson(res, { user: null });
   },
@@ -41,8 +45,7 @@ export const userApi = {
       body: JSON.stringify({ role }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to update role' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to update role' }), 'Failed to update role');
     }
     return safeJson(res, { user: null });
   },
@@ -77,8 +80,7 @@ export const userApi = {
       body: JSON.stringify({ newPassword }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to reset password' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to reset password' }), 'Failed to reset password');
     }
     return safeJson(res, { success: false });
   },
@@ -88,8 +90,7 @@ export const userApi = {
       method: 'DELETE',
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to delete user' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to delete user' }), 'Failed to delete user');
     }
     return safeJson(res, { success: false });
   },
@@ -117,8 +118,7 @@ export const userApi = {
       body: JSON.stringify({ newOwnerId }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to transfer ownership' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to transfer ownership' }), 'Failed to transfer ownership');
     }
     return safeJson(res, { success: false });
   },
@@ -158,8 +158,7 @@ export const userApi = {
       body: JSON.stringify({ reason }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to lock account' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to lock account' }), 'Failed to lock account');
     }
     return safeJson(res, { success: false });
   },
@@ -170,8 +169,7 @@ export const userApi = {
       body: JSON.stringify({ temporaryHours }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to unlock account' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to unlock account' }), 'Failed to unlock account');
     }
     return safeJson(res, { success: false });
   },
@@ -192,8 +190,7 @@ export const userApi = {
       body: JSON.stringify({ hours, reason }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to set MFA bypass' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to set MFA bypass' }), 'Failed to set MFA bypass');
     }
     return safeJson(res, { success: false });
   },
@@ -203,8 +200,7 @@ export const userApi = {
       method: 'DELETE',
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to clear MFA bypass' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to clear MFA bypass' }), 'Failed to clear MFA bypass');
     }
     return safeJson(res, { success: false });
   },
@@ -225,8 +221,7 @@ export const userApi = {
       body: JSON.stringify({ toUserId }),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to transfer dashboards' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to transfer dashboards' }), 'Failed to transfer dashboards');
     }
     return safeJson(res, { success: false, transferredCount: 0 });
   },
@@ -241,8 +236,7 @@ export const userApi = {
       body: JSON.stringify(updates),
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to update user' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to update user' }), 'Failed to update user');
     }
     return safeJson(res, { user: null });
   },
@@ -262,8 +256,7 @@ export const userApi = {
       method: 'DELETE',
     });
     if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to reset MFA' });
-      throw new Error(error.error);
+      throwApiError(await safeJson(res, { error: 'Failed to reset MFA' }), 'Failed to reset MFA');
     }
     return safeJson(res, { success: false });
   },

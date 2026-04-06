@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  FiFolder, FiPlus, FiX, FiMove, FiSearch, FiHome, FiUsers,
+  FiFolder, FiPlus, FiX, FiMove, FiSearch, FiHome,
 } from 'react-icons/fi';
 
 export const CreateFolderModal = ({
@@ -127,71 +127,3 @@ export const MoveDashboardModal = ({
   </div>
 );
 
-export const FolderAccessModal = ({
-  folder, folderGroups, loadingFolderAccess,
-  selectedGroupToAdd, setSelectedGroupToAdd,
-  availableGroupsForFolder, availableGroupsCount,
-  folderAccessError,
-  onAdd, onRemove, onClose,
-}) => (
-  <div className="modal-overlay">
-    <div className="modal folder-access-modal">
-      <div className="modal-header">
-        <h2><FiUsers /> Manage Folder Access</h2>
-        <button className="close-btn" onClick={onClose}><FiX /></button>
-      </div>
-      <div className="modal-body">
-        <p className="folder-access-info">Managing access for: <strong>{folder.name}</strong></p>
-        {loadingFolderAccess ? (
-          <div className="loading-access">Loading access settings...</div>
-        ) : (
-          <>
-            <div className="add-group-section">
-              <label>Add Group Access</label>
-              <div className="add-group-row">
-                <select value={selectedGroupToAdd} onChange={(e) => setSelectedGroupToAdd(e.target.value)} className="group-select">
-                  <option value="">Select a group...</option>
-                  {availableGroupsForFolder.map(group => (
-                    <option key={group.id} value={group.id}>{group.name}</option>
-                  ))}
-                </select>
-                <button className="btn btn-primary btn-small" onClick={onAdd} disabled={!selectedGroupToAdd}>
-                  <FiPlus /> Add
-                </button>
-              </div>
-              {availableGroupsForFolder.length === 0 && availableGroupsCount > 0 && (
-                <p className="no-groups-hint">All groups have been added to this folder</p>
-              )}
-              {availableGroupsCount === 0 && (
-                <p className="no-groups-hint">No groups available. Create groups in User Management.</p>
-              )}
-            </div>
-            <div className="current-groups-section">
-              <label>Groups with Access</label>
-              {folderGroups.length === 0 ? (
-                <p className="no-groups-message">No groups have access to this folder yet.</p>
-              ) : (
-                <ul className="groups-list">
-                  {folderGroups.map(group => (
-                    <li key={group.id} className="group-item">
-                      <div className="group-info">
-                        <FiUsers className="group-icon" />
-                        <span className="group-name">{group.name}</span>
-                        {group.granted_by_name && <span className="granted-by">Added by {group.granted_by_name}</span>}
-                      </div>
-                      <button className="remove-group-btn" onClick={() => onRemove(group.id)} title="Remove access"><FiX /></button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {folderAccessError && <p className="error-text">{folderAccessError}</p>}
-          </>
-        )}
-      </div>
-      <div className="modal-footer">
-        <button className="btn btn-secondary" onClick={onClose}>Close</button>
-      </div>
-    </div>
-  </div>
-);

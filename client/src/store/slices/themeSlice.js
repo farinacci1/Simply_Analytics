@@ -40,23 +40,6 @@ export const createThemeSlice = (set, get) => ({
     }
   },
   
-  loadThemeFromBackend: async () => {
-    try {
-      const { theme } = await userApi.getTheme();
-      if (theme) {
-        document.documentElement.classList.add('theme-transition');
-        localStorage.setItem('theme', theme);
-        document.documentElement.setAttribute('data-theme', theme);
-        set({ theme });
-        setTimeout(() => {
-          document.documentElement.classList.remove('theme-transition');
-        }, 250);
-      }
-    } catch (err) {
-      console.warn('Failed to load theme preference:', err.message);
-    }
-  },
-  
   saveInitialThemeToBackend: async () => {
     const currentTheme = get().theme;
     try {

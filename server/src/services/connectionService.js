@@ -219,7 +219,10 @@ export async function deleteConnection(connectionId, userId) {
 }
 
 export async function testConnection(connectionId, userId) {
-  const connWithCreds = await getConnectionWithCredentials(connectionId, userId);
+  let connWithCreds = await getConnectionWithCredentials(connectionId, userId);
+  if (!connWithCreds) {
+    connWithCreds = await getConnectionWithCredentialsForDashboard(connectionId);
+  }
   if (!connWithCreds) {
     throw new Error('Connection not found');
   }
@@ -397,6 +400,78 @@ export async function getCachedDashboardConnection(connectionId, userId, session
   }
 }
 
+/**
+ * Open a config session for a connection (reuses the dashboard session cache).
+ * Returns the cached Snowflake connection + list of available roles.
+ */
+export async function openConfigSession(connectionId, userId, sessionId) {
+  const connWithCreds = await getConnectionWithCredentials(connectionId, userId);
+  if (!connWithCreds) {
+    const forDashboard = await getConnectionWithCredentialsForDashboard(connectionId);
+    if (!forDashboard) throw new Error('Connection not found');
+    return openConfigSessionWithCreds(forDashboard, sessionId);
+  }
+  return openConfigSessionWithCreds(connWithCreds, sessionId);
+}
+
+async function openConfigSessionWithCreds(connWithCreds, sessionId) {
+  const sfConfig = {
+    account: connWithCreds.account,
+    username: connWithCreds.username,
+    warehouse: connWithCreds.default_warehouse,
+    role: connWithCreds.default_role,
+  };
+
+  if (connWithCreds.auth_type === 'pat') {
+    sfConfig.authenticator = 'PROGRAMMATIC_ACCESS_TOKEN';
+    sfConfig.token = connWithCreds.credentials.token;
+  } else {
+    sfConfig.authenticator = 'SNOWFLAKE_JWT';
+    sfConfig.privateKey = connWithCreds.credentials.privateKey;
+    sfConfig.privateKeyPass = connWithCreds.credentials.passphrase;
+  }
+
+  const connection = await getDashboardConnection(sessionId, connWithCreds.id, sfConfig, { forceNew: true });
+  const rolesResult = await executeQuery(connection, 'SHOW ROLES');
+  const roles = rolesResult.rows.map(r => r.name);
+
+  return { roles };
+}
+
+/**
+ * Switch role on an existing config session and return warehouses for that role.
+ */
+export async function configSessionSwitchRole(connectionId, userId, sessionId, role) {
+  const connWithCreds = await getConnectionWithCredentials(connectionId, userId)
+    || await getConnectionWithCredentialsForDashboard(connectionId);
+  if (!connWithCreds) throw new Error('Connection not found');
+
+  const sfConfig = {
+    account: connWithCreds.account,
+    username: connWithCreds.username,
+    warehouse: connWithCreds.default_warehouse,
+    role,
+  };
+
+  if (connWithCreds.auth_type === 'pat') {
+    sfConfig.authenticator = 'PROGRAMMATIC_ACCESS_TOKEN';
+    sfConfig.token = connWithCreds.credentials.token;
+  } else {
+    sfConfig.authenticator = 'SNOWFLAKE_JWT';
+    sfConfig.privateKey = connWithCreds.credentials.privateKey;
+    sfConfig.privateKeyPass = connWithCreds.credentials.passphrase;
+  }
+
+  // getDashboardConnection reuses the cached connection and runs USE ROLE automatically
+  const connection = await getDashboardConnection(sessionId, connectionId, sfConfig);
+
+  // SHOW WAREHOUSES already scopes to what the active role can access
+  const result = await executeQuery(connection, 'SHOW WAREHOUSES');
+  const warehouses = result.rows.map(w => w.name);
+
+  return { warehouses };
+}
+
 export default {
   getConnectionsByUser,
   getConnectionById,
@@ -409,4 +484,6 @@ export default {
   testConnection,
   getSnowflakeResources,
   getCachedDashboardConnection,
+  openConfigSession,
+  configSessionSwitchRole,
 };

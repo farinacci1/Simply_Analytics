@@ -467,6 +467,55 @@ async function runMigration() {
       console.log('   ⚠️  Could not add SSO/SCIM columns:', migrateErr.message);
     }
 
+    // Add mode and workspace_id columns to ask_conversations
+    console.log('\n🔄 Running SimplyAsk incremental migrations...');
+    try {
+      const modeColCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'ask_conversations' AND column_name = 'mode'
+      `);
+      if (modeColCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE ask_conversations ADD COLUMN mode VARCHAR(20) NOT NULL DEFAULT 'semantic'`);
+        console.log("   ✅ Added 'mode' column to ask_conversations table");
+      } else {
+        console.log("   ✓ 'mode' column already exists on ask_conversations");
+      }
+    } catch (migrateErr) {
+      console.log('   ⚠️  Could not add mode column:', migrateErr.message);
+    }
+
+    try {
+      const wsColCheck = await pool.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'ask_conversations' AND column_name = 'workspace_id'
+      `);
+      if (wsColCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE ask_conversations ADD COLUMN workspace_id UUID REFERENCES ask_workspaces(id) ON DELETE SET NULL`);
+        console.log("   ✅ Added 'workspace_id' column to ask_conversations table");
+      } else {
+        console.log("   ✓ 'workspace_id' column already exists on ask_conversations");
+      }
+    } catch (migrateErr) {
+      console.log('   ⚠️  Could not add workspace_id column:', migrateErr.message);
+    }
+
+    for (const [tbl, col] of [['ask_workspace_views', 'sample_questions'], ['ask_workspace_agents', 'sample_questions']]) {
+      try {
+        const check = await pool.query(`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_name = $1 AND column_name = $2
+        `, [tbl, col]);
+        if (check.rows.length === 0) {
+          await pool.query(`ALTER TABLE ${tbl} ADD COLUMN ${col} JSONB DEFAULT '[]'`);
+          console.log(`   ✅ Added '${col}' column to ${tbl}`);
+        } else {
+          console.log(`   ✓ '${col}' column already exists on ${tbl}`);
+        }
+      } catch (migrateErr) {
+        console.log(`   ⚠️  Could not add ${col} to ${tbl}:`, migrateErr.message);
+      }
+    }
+
     // Create or update admin user with properly hashed password
     console.log('\n👤 Setting up admin user...');
     const adminPassword = 'admin123';
@@ -495,6 +544,37 @@ async function runMigration() {
       }
     } catch (adminErr) {
       console.log('   ⚠️  Could not create/update admin user:', adminErr.message);
+    }
+
+    // Rename 'creator' role to 'editor'
+    try {
+      const creatorCheck = await pool.query(`
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'creator' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')
+      `);
+      if (creatorCheck.rows.length > 0) {
+        // Add 'editor' if it doesn't exist yet
+        const editorCheck = await pool.query(`
+          SELECT 1 FROM pg_enum 
+          WHERE enumlabel = 'editor' 
+          AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')
+        `);
+        if (editorCheck.rows.length === 0) {
+          await pool.query(`ALTER TYPE user_role ADD VALUE 'editor'`);
+        }
+        // Migrate existing users from 'creator' to 'editor'
+        const updated = await pool.query(`UPDATE users SET role = 'editor' WHERE role = 'creator'`);
+        if (updated.rowCount > 0) {
+          console.log(`   ✅ Renamed 'creator' role to 'editor' for ${updated.rowCount} user(s)`);
+        } else {
+          console.log("   ✓ No users with 'creator' role to migrate");
+        }
+      } else {
+        console.log("   ✓ Role 'creator' already removed or 'editor' in use");
+      }
+    } catch (migrateErr) {
+      console.log('   ⚠️  Could not rename creator role:', migrateErr.message);
     }
 
     // Show initial admin user info

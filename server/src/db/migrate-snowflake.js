@@ -199,6 +199,91 @@ async function runMigration() {
       PRIMARY KEY (id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_conversations (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      user_id VARCHAR(36) NOT NULL,
+      connection_id VARCHAR(36),
+      title VARCHAR(500) DEFAULT 'New conversation',
+      created_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      updated_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_messages (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      conversation_id VARCHAR(36) NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      content VARCHAR(16777216) DEFAULT '',
+      artifacts VARCHAR(16777216),
+      created_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (conversation_id) REFERENCES ask_conversations(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_dashboards (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      user_id VARCHAR(36) NOT NULL,
+      connection_id VARCHAR(36),
+      title VARCHAR(500) DEFAULT 'AI Dashboard',
+      yaml_definition VARCHAR(16777216) NOT NULL,
+      share_token VARCHAR(64),
+      created_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_workspaces (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description VARCHAR(16777216),
+      owner_id VARCHAR(36) NOT NULL,
+      connection_id VARCHAR(36) NOT NULL,
+      warehouse VARCHAR(255) NOT NULL,
+      role VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      updated_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (owner_id) REFERENCES users(id),
+      FOREIGN KEY (connection_id) REFERENCES snowflake_connections(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_workspace_views (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      workspace_id VARCHAR(36) NOT NULL,
+      semantic_view_fqn VARCHAR(1000) NOT NULL,
+      label VARCHAR(255),
+      added_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (workspace_id) REFERENCES ask_workspaces(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_workspace_agents (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      workspace_id VARCHAR(36) NOT NULL,
+      agent_fqn VARCHAR(1000) NOT NULL,
+      label VARCHAR(255),
+      added_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (workspace_id) REFERENCES ask_workspaces(id)
+    )`,
+
+    `CREATE HYBRID TABLE IF NOT EXISTS ask_workspace_group_access (
+      id VARCHAR(36) DEFAULT UUID_STRING() NOT NULL,
+      workspace_id VARCHAR(36) NOT NULL,
+      group_id VARCHAR(36) NOT NULL,
+      granted_by VARCHAR(36),
+      granted_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (id),
+      FOREIGN KEY (workspace_id) REFERENCES ask_workspaces(id),
+      FOREIGN KEY (group_id) REFERENCES user_groups(id)
+    )`,
+  ];
+
+  const alterStatements = [
+    `ALTER TABLE ask_conversations ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)`,
+    `ALTER TABLE ask_conversations ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'semantic'`,
   ];
 
   let completed = 0;
@@ -225,6 +310,20 @@ async function runMigration() {
   }
 
   console.log(`\nSchema migration complete: ${completed} created, ${skipped} skipped, ${errors} errors`);
+
+  console.log('\nRunning ALTER TABLE migrations...');
+  for (const sql of alterStatements) {
+    try {
+      await query(sql);
+      console.log(`  OK: ${sql.slice(0, 80)}...`);
+    } catch (err) {
+      if (err.message?.includes('already exists')) {
+        console.log(`  Skipped (column exists): ${sql.slice(0, 60)}...`);
+      } else {
+        console.error(`  WARN: ${err.message}`);
+      }
+    }
+  }
 
   console.log('\nSetting up admin user...');
   const adminPassword = 'admin123';

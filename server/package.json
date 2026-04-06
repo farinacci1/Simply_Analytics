@@ -11,7 +11,10 @@
     "migrate:postgres": "node src/db/migrate-postgres.js",
     "rotate-key": "node src/scripts/rotate-encryption-key.js",
     "docker:build": "docker build -t simply-analytics-server .",
-    "docker:run": "docker run -p 3001:3001 --env-file .env simply-analytics-server"
+    "docker:run": "docker run -p 3001:3001 --env-file .env simply-analytics-server",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@node-saml/node-saml": "^5.1.0",
@@ -32,7 +35,9 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=18.0.0"

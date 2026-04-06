@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FiRefreshCw, FiBarChart2, FiTable, FiDownload, FiLoader,
 } from 'react-icons/fi';
@@ -7,12 +8,33 @@ import { HiSparkles } from 'react-icons/hi2';
 const WidgetMenu = ({
   widgetType, data, showData,
   onRefresh, onToggleData, onExport, onGenerateInsights,
-  insightsLoading, onCloseMenu,
+  insightsLoading, onCloseMenu, anchorEl,
 }) => {
   const hasData = data?.rows?.length > 0;
+  const menuRef = useRef(null);
+  const [pos, setPos] = useState(null);
 
-  return (
-    <div className="widget-menu">
+  useEffect(() => {
+    if (!anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }, [anchorEl]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) &&
+          anchorEl && !anchorEl.contains(e.target)) {
+        onCloseMenu();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [anchorEl, onCloseMenu]);
+
+  if (!pos) return null;
+
+  const menu = (
+    <div className="widget-menu" ref={menuRef} style={{ top: pos.top, right: pos.right }}>
       <button onClick={() => { onRefresh(); onCloseMenu(); }}>
         <FiRefreshCw /> Refresh
       </button>
@@ -43,6 +65,8 @@ const WidgetMenu = ({
       </button>
     </div>
   );
+
+  return createPortal(menu, document.body);
 };
 
 export default WidgetMenu;

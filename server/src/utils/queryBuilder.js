@@ -268,9 +268,10 @@ const buildQueryFromConfig = (config) => {
     markFields = [],
     fieldMarkTypes = {}, // Mark types for fields on shelves (color, cluster, detail, etc.)
     fieldAggregations = {}, // Aggregation types per field (SUM, AVG, etc.)
-    customColumns = [],
+    customColumns: _rawCustomColumns = [],
     viewMetadata = {},
   } = config;
+  const customColumns = Array.isArray(_rawCustomColumns) ? _rawCustomColumns : [];
   
   // Mark types that affect grouping (add to GROUP BY)
   const GROUPING_MARK_TYPES = ['color', 'cluster', 'detail'];
@@ -523,9 +524,10 @@ const buildQueryDirect = ({
   aggregatedDimensions = [],
   filters = [],
   orderBy = [],
-  customColumns = [],
+  customColumns: _customColumns = [],
   limit = DEFAULT_QUERY_LIMIT,
 }) => {
+  const customColumns = Array.isArray(_customColumns) ? _customColumns : [];
   if (!semanticViewFQN) return '-- Select a data source';
 
   // Normalize measures to always be objects with { name, aggregation }
@@ -1322,6 +1324,7 @@ export {
   resolveCalcFieldReferences,
   sanitizeOperator,
   formatSqlValue,
+  buildFilterCondition,
   buildQueryFromConfig,
   buildQueryDirect,
   buildQuery,

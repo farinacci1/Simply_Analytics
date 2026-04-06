@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
-import { userApi } from '../../../api/apiClient';
+import { userApi, authApi } from '../../../api/apiClient';
 import { ROLE_HIERARCHY } from '../constants';
+
+const MFA_MSG = 'Multi-factor authentication is required to manage users. Please set up MFA in Settings.';
+
+function isMfaRequired(err) {
+  return err.code === 'MFA_REQUIRED';
+}
 
 export const useUserManagement = (currentUser, currentRole, toast) => {
   const [users, setUsers] = useState([]);
@@ -21,6 +27,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [passwordPolicy, setPasswordPolicy] = useState({ minLength: 14, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecial: true });
 
   // Transfer ownership
   const [showTransferOwnershipModal, setShowTransferOwnershipModal] = useState(false);
@@ -45,7 +52,10 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
   const [userDashboards, setUserDashboards] = useState([]);
   const [dashboardTransferTarget, setDashboardTransferTarget] = useState('');
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    loadUsers();
+    authApi.getPasswordPolicy().then(setPasswordPolicy).catch(() => {});
+  }, []);
 
   const loadUsers = async () => {
     try {
@@ -66,19 +76,20 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
   };
 
   const validatePassword = (password) => {
+    const p = passwordPolicy;
     const errors = [];
-    if (password.length < 14) errors.push('at least 14 characters');
-    if (!/[A-Z]/.test(password)) errors.push('1 uppercase letter');
-    if (!/[a-z]/.test(password)) errors.push('1 lowercase letter');
-    if (!/[0-9]/.test(password)) errors.push('1 number');
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('1 special character');
+    if (password.length < p.minLength) errors.push(`at least ${p.minLength} characters`);
+    if (p.requireUppercase && !/[A-Z]/.test(password)) errors.push('1 uppercase letter');
+    if (p.requireLowercase && !/[a-z]/.test(password)) errors.push('1 lowercase letter');
+    if (p.requireNumber && !/[0-9]/.test(password)) errors.push('1 number');
+    if (p.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('1 special character');
     return errors;
   };
 
   const getAssignableRoles = () => {
-    if (currentRole === 'owner') return ['admin', 'creator', 'viewer'];
-    if (currentRole === 'admin') return ['creator', 'viewer'];
-    if (currentRole === 'creator') return ['viewer'];
+    if (currentRole === 'owner') return ['admin', 'editor', 'viewer'];
+    if (currentRole === 'admin') return ['editor', 'viewer'];
+    if (currentRole === 'editor') return ['viewer'];
     return [];
   };
 
@@ -99,15 +110,23 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
   // --- CRUD handlers ---
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    setFormLoading(true);
     setFormError(null);
+
+    const passwordErrors = validatePassword(formData.password);
+    if (passwordErrors.length > 0) {
+      setFormError(`Password must have: ${passwordErrors.join(', ')}`);
+      return;
+    }
+
+    setFormLoading(true);
     try {
       await userApi.create(formData);
       await loadUsers();
       setShowCreateModal(false);
       resetForm();
     } catch (err) {
-      setFormError(err.message);
+      if (isMfaRequired(err)) { setShowCreateModal(false); toast.error(MFA_MSG); }
+      else setFormError(err.message);
     } finally {
       setFormLoading(false);
     }
@@ -119,7 +138,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       await loadUsers();
       toast.success('Role updated successfully');
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     }
   };
 
@@ -165,7 +184,8 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       setShowEditModal(false);
       resetForm();
     } catch (err) {
-      setFormError(err.message);
+      if (isMfaRequired(err)) { setShowEditModal(false); toast.error(MFA_MSG); }
+      else setFormError(err.message);
     } finally {
       setFormLoading(false);
     }
@@ -179,7 +199,8 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       await loadUsers();
       setUserToDelete(null);
     } catch (err) {
-      if (err.message.includes('dashboard')) {
+      if (isMfaRequired(err)) { setUserToDelete(null); toast.error(MFA_MSG); }
+      else if (err.message.includes('dashboard')) {
         try {
           const { dashboards } = await userApi.getUserDashboards(userToDelete.id);
           setUserDashboards(dashboards);
@@ -206,7 +227,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       await loadUsers();
       toast.success(`Account locked for ${userToLock.display_name || userToLock.username}`);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     } finally {
       setShowLockConfirm(false);
       setUserToLock(null);
@@ -229,7 +250,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       toast.success(`Account unlocked for ${selectedUser.display_name || selectedUser.username}`);
       setSelectedUser(null);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     } finally {
       setSecurityActionLoading(false);
     }
@@ -251,7 +272,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       toast.success(`MFA bypassed for ${mfaBypassHours} hours. User can now login without MFA.`);
       setSelectedUser(null);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     } finally {
       setSecurityActionLoading(false);
     }
@@ -269,7 +290,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       await loadUsers();
       toast.success('MFA has been reset. User will need to set up MFA again within the grace period.');
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     } finally {
       setShowResetMfaConfirm(false);
       setUserToResetMfa(null);
@@ -308,7 +329,8 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       closeTransferOwnershipModal();
       window.location.reload();
     } catch (err) {
-      setTransferError(err.message || 'Failed to transfer ownership');
+      if (isMfaRequired(err)) { closeTransferOwnershipModal(); toast.error(MFA_MSG); }
+      else setTransferError(err.message || 'Failed to transfer ownership');
     } finally {
       setTransferLoading(false);
     }
@@ -327,7 +349,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
       toast.success('Dashboards transferred and user deleted');
       setUserToDelete(null);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(isMfaRequired(err) ? MFA_MSG : err.message);
     } finally {
       setSecurityActionLoading(false);
     }
@@ -367,5 +389,7 @@ export const useUserManagement = (currentUser, currentRole, toast) => {
     userDashboards, setUserDashboards,
     dashboardTransferTarget, setDashboardTransferTarget,
     handleTransferDashboards,
+    // Password policy
+    passwordPolicy,
   };
 };

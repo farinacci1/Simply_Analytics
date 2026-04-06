@@ -1,17 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { folderApi } from '../../../api/apiClient';
+import { useAppStore } from '../../../store/appStore';
+
+// Module-level cache so data survives component unmount/remount
+const cache = {};
+function getCacheKey(folderId, workspaceId) { return `${workspaceId || '_'}:${folderId || '__root__'}`; }
 
 export const useBrowserData = (isInitialized, isAuthenticated) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeWorkspace = useAppStore(state => state.activeWorkspace);
 
-  const [currentFolderId, setCurrentFolderId] = useState(null);
-  const [folderPath, setFolderPath] = useState([]);
-  const [folders, setFolders] = useState([]);
-  const [dashboards, setDashboards] = useState([]);
-  const [currentFolder, setCurrentFolder] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const initialFolderId = searchParams.get('folder') || null;
+  const cached = cache[getCacheKey(initialFolderId, activeWorkspace?.id)];
+
+  const [currentFolderId, setCurrentFolderId] = useState(initialFolderId);
+  const [folderPath, setFolderPath] = useState(cached?.folderPath || []);
+  const [folders, setFolders] = useState(cached?.folders || []);
+  const [dashboards, setDashboards] = useState(cached?.dashboards || []);
+  const [currentFolder, setCurrentFolder] = useState(cached?.currentFolder || null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,25 +28,45 @@ export const useBrowserData = (isInitialized, isAuthenticated) => {
   const [isSearching, setIsSearching] = useState(false);
 
   const loadContents = useCallback(async (folderId = null) => {
-    setLoading(true);
+    const key = getCacheKey(folderId, activeWorkspace?.id);
+    const hasCache = !!cache[key];
+    if (!hasCache) setLoading(true);
     setError(null);
     try {
-      const data = await folderApi.getContents(folderId);
-      setFolders(data.folders || []);
-      setDashboards(data.dashboards || []);
-      setCurrentFolder(data.folder || null);
-      setFolderPath(data.path || []);
+      const data = await folderApi.getContents(folderId, activeWorkspace?.id);
+      const result = {
+        folders: data.folders || [],
+        dashboards: data.dashboards || [],
+        currentFolder: data.folder || null,
+        folderPath: data.path || [],
+      };
+      cache[key] = result;
+      setFolders(result.folders);
+      setDashboards(result.dashboards);
+      setCurrentFolder(result.currentFolder);
+      setFolderPath(result.folderPath);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeWorkspace?.id]);
 
   useEffect(() => {
     if (!isInitialized || !isAuthenticated) return;
-    const folderId = searchParams.get('folder');
+    const folderId = searchParams.get('folder') || null;
     setCurrentFolderId(folderId);
+
+    const key = getCacheKey(folderId, activeWorkspace?.id);
+    const hit = cache[key];
+    if (hit) {
+      setFolders(hit.folders);
+      setDashboards(hit.dashboards);
+      setCurrentFolder(hit.currentFolder);
+      setFolderPath(hit.folderPath);
+      setLoading(false);
+    }
+
     loadContents(folderId);
   }, [searchParams, loadContents, isInitialized, isAuthenticated]);
 
@@ -50,7 +79,7 @@ export const useBrowserData = (isInitialized, isAuthenticated) => {
       if (searchQuery.length >= 2) {
         setIsSearching(true);
         try {
-          const results = await folderApi.search(searchQuery);
+          const results = await folderApi.search(searchQuery, activeWorkspace?.id);
           setSearchResults({
             folders: results?.folders || [],
             dashboards: results?.dashboards || [],
@@ -77,7 +106,7 @@ export const useBrowserData = (isInitialized, isAuthenticated) => {
   };
 
   const openDashboard = (dashboardId) => {
-    navigate(`/dashboards?id=${dashboardId}`);
+    navigate(`/workspaces/${activeWorkspace?.id}/dashboards?id=${dashboardId}`);
   };
 
   const formatDate = (dateString) => {

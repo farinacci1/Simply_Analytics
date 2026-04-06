@@ -1,7 +1,7 @@
 <h1 align="center">Simply Analytics</h1>
 
 <p align="center">
-  An open-source analytics platform for Snowflake with drag-and-drop dashboards, 25+ visualization types, and enterprise security.
+  An open-source analytics platform for Snowflake with drag-and-drop dashboards, 20+ visualization types, AI-powered natural language analytics, and enterprise security — all deployable through a guided web-based setup wizard.
 </p>
 
 <p align="center">
@@ -10,14 +10,15 @@
   <a href="#docker-deployment">Docker</a> •
   <a href="#configuration">Configuration</a> •
   <a href="#architecture">Architecture</a> •
+  <a href="#testing">Testing</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Snowflake-Powered-00d4ff?style=flat-square&logo=snowflake" />
   <img src="https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react" />
-  <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js" />
+  <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" />
 </p>
 
 ---
@@ -25,29 +26,56 @@
 ## Features
 
 ### Dashboards
-- **25+ visualization types** — bar, line, area, pie, donut, scatter, bubble, heatmap, treemap, sunburst, sankey, funnel, icicle, radar, histogram, boxplot, violin, choropleth, bubble map, metric cards, data tables, pivot tables
+- **20+ visualization types** — vertical bar, horizontal bar, diverging bar, line, area, pie, donut, scatter, heatmap, treemap, icicle, sankey, funnel, waterfall, radar, histogram, box plot, choropleth map, hexbin map, gauge, metric cards, data tables
 - **Drag-and-drop widget editor** with field shelves, aggregation controls, filters, sorts, and calculated fields
-- **Adaptive and fixed layouts** with multi-tab support
+- **Adaptive and fixed layouts** with multi-tab support and customizable canvas colors
 - **Real-time data refresh** from Snowflake
+- **Global dashboard filters** with cross-widget filtering
+- **Export** — PNG chart export and CSV data download
+
+### AskAI — Natural Language Analytics
+- **Conversational analytics** — ask questions in plain language and get instant charts, tables, and dashboards
+- **Two modes**: Semantic View analysis (structured SQL generation) and Cortex Agent proxying (agentic RAG)
+- **Workspaces** — scoped environments with configured Snowflake connections, semantic views, and Cortex agents
+- **Group-based access control** on workspaces
+- **Persistent conversations** with encrypted message storage (AES-256-GCM)
+- **Rich artifacts** — interactive charts, data tables, and multi-widget dashboard layouts generated from natural language
+- **Shareable dashboards** — public share links for AI-generated dashboard artifacts
+- **Export** — conversation PDF export, chart PNG export, data CSV download
+- **Sample questions** — configurable per semantic view or agent for guided exploration
+
+### Dashboard AI Copilot
+- **In-editor AI assistant** — contextual side panel powered by Snowflake Cortex COMPLETE
+- **Widget-aware** — focus on a specific widget for targeted modifications
+- **Suggestion chips** from semantic view dimensions, measures, and facts
+- **Undo stack** with revert capabilities for AI-applied changes
 
 ### Snowflake Integration
-- Direct integration with **Snowflake Semantic Views**
-- Multiple authentication methods: PAT, key pair, OAuth
+- Direct integration with **Snowflake Semantic Views** for governed data access
+- **Cortex AI** — natural language analytics via Cortex COMPLETE and Cortex Agents
+- Multiple authentication methods: PAT, key pair
 - Connection pooling, role/warehouse switching
-- **Cortex AI** — natural language data explanations powered by Snowflake Cortex COMPLETE
 
 ### Enterprise Security
 - **Multi-factor authentication** — TOTP (Google Authenticator, Authy) and FIDO2 Passkeys (WebAuthn)
 - **SAML 2.0 SSO** — Okta, Microsoft Entra ID, or any SAML IdP
 - **SCIM 2.0** — automated user and group provisioning
-- **RBAC** — Owner, Admin, Editor, Viewer roles with group-based dashboard access
+- **RBAC** — Owner, Admin, Editor, Viewer roles with group-based dashboard and workspace access
 - AES-256-GCM credential encryption at rest with key rotation
 - Rate limiting, account lockout, audit logging, Helmet security headers
-- Single-session enforcement with Redis-backed distributed sessions
+- Session timeout with inactivity tracking
+
+### Web-Based Setup & Administration
+- **Guided setup wizard** — configure database, security keys, run migrations, and create the owner account entirely through the browser
+- **Encrypted configuration** — server config stored in AES-256-GCM encrypted file with a one-time master key
+- **Emergency access** — master key login when the database is unreachable
+- **Database migration wizard** — migrate all data to a new PostgreSQL instance with verification
+- **Key rotation** — rotate JWT secrets and encryption keys from the admin UI
+- **System monitoring** — uptime, memory usage, active sessions, and server health at a glance
 
 ### Metadata Backend
 - **PostgreSQL** (recommended) or **Snowflake** as the metadata store
-- Full migration scripts for both backends
+- Full migration scripts for both backends with SSE-streamed progress logs
 
 ---
 
@@ -56,7 +84,7 @@
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL 14+
+- PostgreSQL 14+ (or a Snowflake account for metadata)
 - A Snowflake account with Semantic Views
 
 ### Install
@@ -67,9 +95,27 @@ cd Simply-Analytics
 npm run install:all
 ```
 
-### Configure
+### Option A: Web-Based Setup (Recommended)
 
-Create `server/.env`:
+Start the application without any configuration — the setup wizard handles everything:
+
+```bash
+npm run dev
+```
+
+1. Open http://localhost:5173
+2. Sign in with the bootstrap credentials: `admin` / `admin123`
+3. Follow the guided wizard:
+   - **Database** — choose PostgreSQL or Snowflake and enter connection details
+   - **Security** — review auto-generated JWT and encryption keys
+   - **Migrations** — schema creation runs automatically
+   - **Owner** — create your permanent owner account
+4. Save the master encryption key when prompted — it won't be shown again
+5. Sign in with your new owner account
+
+### Option B: Manual Configuration
+
+Create `server/.env` with the required variables (see [Configuration](#configuration) below):
 
 ```env
 NODE_ENV=development
@@ -80,7 +126,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
-POSTGRES_DATABASE=simply_analytics
+POSTGRES_DB=simply_analytics
 
 # Auth (generate strong random values)
 JWT_SECRET=your-secret-min-32-characters-long
@@ -91,23 +137,19 @@ CREDENTIALS_ENCRYPTION_KEY=your-encryption-key-32-chars
 CORS_ORIGINS=http://localhost:5173
 ```
 
-### Migrate
+Run migrations and start:
 
 ```bash
-cd server
-node src/db/migrate-postgres.js
+cd server && node src/db/migrate-postgres.js
+cd .. && npm run dev
 ```
 
 This creates all tables and a default admin user (`admin` / `admin123`).
 
-### Run
+### Access
 
-```bash
-npm run dev
-```
-
-- **API** → http://localhost:3001
 - **Frontend** → http://localhost:5173
+- **API** → http://localhost:3001
 
 > Change the default admin password immediately after first login.
 
@@ -119,20 +161,30 @@ npm run dev
 docker compose up -d
 ```
 
-This starts four services:
+This starts two services:
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `postgres` | 5432 | Metadata storage |
-| `redis` | 6379 | Session storage |
-| `api` | 3001 | Express API server |
+| `api` | 3001 | Express API server with encrypted config volume |
 | `client` | 80 | Nginx serving the React SPA + API proxy |
+
+The database is **not** bundled — provide your own PostgreSQL or Snowflake instance and configure it through the setup wizard on first launch. Server configuration is persisted in a Docker volume (`config-data`) and encrypted with a master key generated on first launch.
 
 ---
 
 ## Configuration
 
-### Environment Variables
+### Encrypted Config Store
+
+When using the web-based setup wizard, all configuration is stored in an AES-256-GCM encrypted file (`data/config.json`). The master encryption key is:
+
+1. Read from the `MASTER_KEY` environment variable, or
+2. Read from a file at `MASTER_KEY_PATH`, or
+3. Auto-generated and stored at `data/.master-key`
+
+The master key is shown once during setup. Store it securely for emergency access.
+
+### Environment Variables (Manual Mode)
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -142,20 +194,21 @@ This starts four services:
 | `POSTGRES_PORT` | PostgreSQL port | `5432` |
 | `POSTGRES_USER` | PostgreSQL username | — |
 | `POSTGRES_PASSWORD` | PostgreSQL password | — |
-| `POSTGRES_DATABASE` | PostgreSQL database | — |
+| `POSTGRES_DB` | PostgreSQL database | — |
 | `JWT_SECRET` | JWT signing secret (min 32 chars) | — |
 | `JWT_EXPIRY` | Token expiry duration | `8h` |
 | `CREDENTIALS_ENCRYPTION_KEY` | AES-256 key for credential encryption | — |
 | `CORS_ORIGINS` | Comma-separated allowed origins | — |
 | `METADATA_BACKEND` | `postgres` or `snowflake` | `postgres` |
+| `SESSION_TIMEOUT_MINUTES` | Inactivity timeout | `20` |
 
 ### SSO (Optional)
 
 ```env
 SSO_ENABLED=true
-SAML_ENTRY_POINT=https://your-idp.example.com/sso/saml
+SAML_ENTRYPOINT=https://your-idp.example.com/sso/saml
 SAML_ISSUER=simply-analytics
-SAML_CALLBACK_URL=https://your-app.example.com/api/saml/callback
+SAML_CALLBACK_URL=https://your-app.example.com/api/v1/saml/callback
 SAML_CERT=<Base64 IdP signing certificate>
 ```
 
@@ -171,73 +224,89 @@ SCIM_BEARER_TOKEN=your-scim-token
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   React 18 + Vite                      │
-│  Dashboard Builder · Widget Editor · Admin Console     │
-│  D3.js · ECharts · AG Grid · GridStack · @dnd-kit     │
-└──────────────────────────┬─────────────────────────────┘
-                           │ REST + JWT
-┌──────────────────────────┴─────────────────────────────┐
-│                Express API Server                      │
-│  Auth · SAML SSO · SCIM · MFA · Dashboard · Query     │
-│  Helmet · Rate Limiting · Audit Log                    │
-└───────────┬──────────────────────────────┬─────────────┘
-            │                              │
-   PostgreSQL / Redis               Snowflake SDK
-            │                              │
-┌───────────┴───────────┐   ┌──────────────┴─────────────┐
-│  Metadata + Sessions  │   │   Snowflake Data Cloud     │
-│  Users · Dashboards   │   │   Semantic Views · Cortex  │
-│  Connections · Groups │   │   Queries · AI Insights    │
-└───────────────────────┘   └────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    React 18 + Vite                          │
+│  Dashboard Builder · Widget Editor · AskAI · Admin Console │
+│  D3.js · ECharts · AG Grid · TanStack · GridStack · @dnd-kit│
+└────────────────────────────┬────────────────────────────────┘
+                             │ REST + JWT
+┌────────────────────────────┴────────────────────────────────┐
+│                   Express API Server                        │
+│  Auth · SAML SSO · SCIM · MFA · Dashboard · Ask · Admin    │
+│  Workspaces · Encrypted Config Store · Helmet · Rate Limit  │
+└────────────┬────────────────────────────────┬───────────────┘
+             │                                │
+    PostgreSQL                         Snowflake SDK
+             │                                │
+┌────────────┴────────────────┐  ┌────────────┴──────────────┐
+│   Metadata + Config         │  │   Snowflake Data Cloud    │
+│   Users · Dashboards · Ask  │  │   Semantic Views · Cortex │
+│   Workspaces · Groups       │  │   Queries · AI Insights   │
+│   Encrypted Credentials     │  │   Cortex Agents           │
+└─────────────────────────────┘  └───────────────────────────┘
 ```
 
 ### Project Structure
 
 ```
 simply-analytics/
-├── client/                  # React SPA
+├── client/                     # React SPA
 │   ├── src/
-│   │   ├── api/             # API client
-│   │   ├── components/      # UI components
-│   │   │   ├── charts/      # 25+ visualization types
-│   │   │   └── widget-editor/ # Drag-and-drop editor
-│   │   ├── store/           # Zustand state management
-│   │   └── styles/          # Global styles + themes
+│   │   ├── api/                # API client modules (16 modules)
+│   │   ├── components/
+│   │   │   ├── ai/             # Dashboard AI copilot
+│   │   │   ├── ask/            # Simply Ask chat components & renderers
+│   │   │   ├── charts/         # 20+ visualization types (D3.js + ECharts)
+│   │   │   ├── dashboard-browser/ # Folder & dashboard browsing
+│   │   │   ├── dashboard-settings-modal/ # Dashboard settings & access
+│   │   │   ├── dashboard-view/ # Dashboard layout, tabs & hooks
+│   │   │   ├── dashboard-widget/ # Widget rendering & menus
+│   │   │   ├── shared/         # Reusable UI components
+│   │   │   ├── widget-editor/  # Drag-and-drop widget editor
+│   │   │   └── users-management/ # User & group management
+│   │   ├── store/              # Zustand state management (9 slices)
+│   │   ├── utils/              # Export utilities (PNG, CSV, PDF)
+│   │   └── views/              # Page-level components (8 views)
 │   ├── Dockerfile
 │   └── nginx.conf
-├── server/                  # Express API
+├── server/                     # Express API
 │   ├── src/
-│   │   ├── db/              # PostgreSQL + Snowflake backends
-│   │   ├── middleware/      # Auth, rate limiting
-│   │   ├── routes/          # API endpoints
-│   │   ├── services/        # Business logic
-│   │   └── scripts/         # Key rotation utilities
+│   │   ├── config/             # Encrypted config store & hot reload
+│   │   ├── db/                 # PostgreSQL + Snowflake backends
+│   │   ├── middleware/         # Auth, rate limiting, session management
+│   │   ├── routes/             # API endpoints (16 route files)
+│   │   ├── services/           # Business logic (14 services)
+│   │   └── utils/              # Encryption, query builder
 │   └── Dockerfile
+├── tests/                      # Vitest unit & integration tests
+├── e2e/                        # Playwright end-to-end tests
 ├── docker-compose.yml
-└── package.json             # Workspace root
+├── playwright.config.js
+└── package.json                # Workspace root
 ```
 
 ### Tech Stack
 
 | Layer | Technologies |
 |-------|-------------|
-| **Frontend** | React 18, Vite, Zustand, D3.js, ECharts, AG Grid, GridStack, @dnd-kit |
-| **Backend** | Express, PostgreSQL, Snowflake SDK, Redis |
+| **Frontend** | React 18, Vite, Zustand, D3.js, ECharts, AG Grid, TanStack Table/Virtual, GridStack, @dnd-kit, React Router 7, html-to-image, jsPDF |
+| **Backend** | Express, PostgreSQL, Snowflake SDK |
+| **AI** | Snowflake Cortex COMPLETE, Snowflake Cortex Agents |
 | **Auth** | JWT, bcrypt, SAML 2.0, SCIM 2.0, TOTP, WebAuthn/FIDO2 |
-| **Security** | AES-256-GCM, Helmet, express-rate-limit |
+| **Security** | AES-256-GCM (credentials + config + messages), Helmet, express-rate-limit |
+| **Testing** | Vitest, Playwright, supertest |
 | **Infra** | Docker, Nginx |
 
 ---
 
 ## User Roles
 
-| Role | Dashboards | Connections | Users | Groups |
-|------|-----------|-------------|-------|--------|
-| **Owner** | Full access | Manage | Manage all | Manage |
-| **Admin** | Create & edit | Manage | Manage | Manage |
-| **Editor** | Create & edit | View | — | — |
-| **Viewer** | View only | — | — | — |
+| Role | Dashboards | AskAI | Connections | Users | Admin |
+|------|-----------|-------|-------------|-------|-------|
+| **Owner** | Full access | Full access + manage workspaces | Manage | Manage all | Full admin |
+| **Admin** | Create & edit | Access via workspace groups | Manage | Manage | — |
+| **Editor** | Create & edit | Access via workspace groups | View | — | — |
+| **Viewer** | View only | Access via workspace groups | — | — | — |
 
 ---
 
@@ -245,19 +314,65 @@ simply-analytics/
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/auth/login` | Authenticate (password, PAT, keypair) |
-| `GET /api/auth/roles` | List available Snowflake roles |
-| `GET/POST /api/2fa/*` | TOTP and Passkey management |
-| `GET /api/saml/login` | Initiate SAML SSO |
-| `POST /api/saml/callback` | SAML assertion callback |
+| `POST /api/v1/auth/login` | Authenticate (password) |
+| `POST /api/v1/auth/emergency-login` | Master key emergency access |
+| `GET/POST /api/v1/2fa/*` | TOTP and Passkey management |
+| `GET /api/v1/saml/login` | Initiate SAML SSO |
+| `POST /api/v1/saml/callback` | SAML assertion callback |
 | `/scim/v2/Users`, `/scim/v2/Groups` | SCIM 2.0 provisioning |
-| `GET/POST/PUT/DELETE /api/dashboard/*` | Dashboard CRUD |
-| `POST /api/query/execute` | Execute Snowflake queries |
-| `GET /api/semantic/*` | Semantic view discovery |
-| `GET/POST/PUT/DELETE /api/users/*` | User management |
-| `GET/POST/PUT/DELETE /api/connections/*` | Connection management |
-| `GET/POST/PUT/DELETE /api/groups/*` | Group management |
-| `GET/POST/PUT/DELETE /api/folders/*` | Folder management |
+| `GET/POST/PUT/DELETE /api/v1/dashboard/*` | Dashboard CRUD |
+| `POST /api/v1/query/execute` | Execute Snowflake queries |
+| `GET /api/v1/semantic/*` | Semantic view discovery |
+| `GET/POST/PUT/DELETE /api/v1/users/*` | User management |
+| `GET/POST/PUT/DELETE /api/v1/connections/*` | Connection management |
+| `GET/POST/PUT/DELETE /api/v1/groups/*` | Group management |
+| `GET/POST/PUT/DELETE /api/v1/folders/*` | Folder management |
+| `GET/POST/PUT/DELETE /api/v1/workspaces/*` | Workspace management |
+| `POST /api/v1/ask/message` | AskAI semantic mode (SSE) |
+| `POST /api/v1/ask/agent-message` | AskAI agent mode (SSE) |
+| `GET/POST/DELETE /api/v1/ask/conversations/*` | Conversation management |
+| `POST /api/v1/ask/dashboards` | Save AI-generated dashboard |
+| `GET /api/v1/ask/shared/dashboard/:token` | Public shared dashboard |
+| `POST /api/v1/dashboard-ai/chat` | Dashboard AI copilot (SSE) |
+| `GET/PUT /api/v1/admin/config` | Admin configuration |
+| `POST /api/v1/admin/migrate` | Schema migrations (SSE) |
+| `POST /api/v1/admin/migrate-data` | Data migration (SSE) |
+| `POST /api/v1/admin/rotate-key/:type` | Key rotation (jwt/encryption) |
+| `GET /api/v1/admin/system` | System health info |
+| `GET/POST /api/v1/setup/*` | Initial setup wizard |
+
+---
+
+## Testing
+
+Simply Analytics includes unit, integration, and end-to-end tests.
+
+### Unit & Integration Tests
+
+```bash
+# Run all tests
+npm test
+
+# Server tests only
+npm run test:server
+
+# Client tests only
+npm run test:client
+```
+
+Tests use [Vitest](https://vitest.dev/) with jsdom for client component tests and [supertest](https://github.com/ladjs/supertest) for server API tests.
+
+### End-to-End Tests
+
+```bash
+# Install Playwright browsers (first time)
+npx playwright install
+
+# Run E2E tests
+npm run test:e2e
+```
+
+E2E tests use [Playwright](https://playwright.dev/) and automatically start the dev server.
 
 ---
 
@@ -276,11 +391,11 @@ lsof -ti:3001 | xargs kill -9
 **Snowflake network policy errors:**
 Ensure your IP is allowlisted or connect through VPN, then use the Reconnect button.
 
-**Encryption key rotation:**
-```bash
-cd server
-node src/scripts/rotate-encryption-key.js
-```
+**Lost master key:**
+If you lose the master encryption key, delete `data/config.json` and `data/.master-key`, then re-run the setup wizard. All configuration will need to be re-entered.
+
+**Emergency database access:**
+If the database is unreachable, use the master key to sign in via the emergency login flow. Update your database credentials from the admin panel, then sign out and back in normally.
 
 ---
 
@@ -298,4 +413,4 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 ## License
 
-[Apache 2.0 Lic](LICENSE.md) — Jorge Farinacci
+[Apache 2.0](LICENSE.md) — Jorge Farinacci

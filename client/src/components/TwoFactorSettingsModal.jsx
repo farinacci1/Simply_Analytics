@@ -11,6 +11,7 @@ import {
   FiAlertTriangle
 } from 'react-icons/fi';
 import { twoFactorApi } from '../api/apiClient';
+import { useAppStore } from '../store/appStore';
 import '../styles/TwoFactorSettingsModal.css';
 
 // Helper functions for WebAuthn - browser independent
@@ -89,6 +90,7 @@ async function nativeStartRegistration(options) {
 }
 
 const TwoFactorSettingsModal = () => {
+  const currentRole = useAppStore((s) => s.currentRole);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -279,13 +281,20 @@ const TwoFactorSettingsModal = () => {
         )}
 
         {/* Grace Period Warning */}
-        {status?.twoFactorRequired && !status?.has2FA && status?.gracePeriodDaysRemaining && (
+        {status?.twoFactorRequired && !status?.has2FA && (
           <div className="alert warning">
             <FiAlertTriangle />
             <div>
               <strong>2FA Required</strong>
-              <p>You have {status.gracePeriodDaysRemaining} days to set up Multi-Factor Authentication. 
-                 Your account will be locked after this period.</p>
+              {currentRole === 'owner' ? (
+                <p>Multi-Factor Authentication is required. You will not be able to create or manage 
+                   anything (users, dashboards, etc.) until MFA is set up.</p>
+              ) : status?.gracePeriodDaysRemaining > 0 ? (
+                <p>You have {status.gracePeriodDaysRemaining} days to set up Multi-Factor Authentication. 
+                   Your account will be locked after this period.</p>
+              ) : (
+                <p>Your MFA grace period has expired. Please set up MFA immediately to regain access.</p>
+              )}
             </div>
           </div>
         )}

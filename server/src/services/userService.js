@@ -1,13 +1,14 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, transaction, parseJson, jsonSet, now } from '../db/db.js';
+import configStore from '../config/configStore.js';
 
 const SALT_ROUNDS = 10;
 
 const ROLE_HIERARCHY = {
   owner: 4,
   admin: 3,
-  creator: 2,
+  editor: 2,
   viewer: 1,
 };
 
@@ -55,6 +56,11 @@ export async function getUserByEmail(email) {
 export async function createUser({ username, email, password, displayName, role, createdBy }) {
   if (!ROLE_HIERARCHY[role]) {
     throw new Error(`Invalid role: ${role}`);
+  }
+
+  const passwordErrors = validatePasswordStrength(password);
+  if (passwordErrors.length > 0) {
+    throw new Error(`Password must have: ${passwordErrors.join(', ')}`);
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -117,11 +123,11 @@ export async function updateUserRole(userId, newRole, assignerUser) {
   if (assignerUser.role === 'owner') {
   } else if (assignerUser.role === 'admin') {
     if (newRole === 'owner' || newRole === 'admin') {
-      throw new Error('Admins can only assign creator or viewer roles');
+      throw new Error('Admins can only assign editor or viewer roles');
     }
-  } else if (assignerUser.role === 'creator') {
+  } else if (assignerUser.role === 'editor') {
     if (newRole !== 'viewer') {
-      throw new Error('Creators can only assign viewer role');
+      throw new Error('Editors can only assign viewer role');
     }
   } else {
     throw new Error('You do not have permission to assign roles');
@@ -138,7 +144,7 @@ export async function updateUserRole(userId, newRole, assignerUser) {
   }
 
   const lockCheck = await query(`
-    SELECT account_locked, totp_enabled, passkey_enabled 
+    SELECT account_locked, totp_enabled, passkey_enabled, auth_provider 
     FROM users WHERE id = $1
   `, [userId]);
   
@@ -146,11 +152,12 @@ export async function updateUserRole(userId, newRole, assignerUser) {
     throw new Error('Cannot change role of a locked account. Unlock the account first.');
   }
 
-  if (['admin', 'creator'].includes(newRole) && !['admin', 'creator', 'owner'].includes(targetUser.role)) {
-    const hasMfa = lockCheck.rows[0]?.totp_enabled || lockCheck.rows[0]?.passkey_enabled;
+  if (['admin', 'editor'].includes(newRole) && !['admin', 'editor', 'owner'].includes(targetUser.role)) {
+    const row = lockCheck.rows[0];
+    const hasMfa = row?.auth_provider === 'saml' || row?.totp_enabled || row?.passkey_enabled;
     
     if (!hasMfa) {
-      throw new Error(`Cannot promote to ${newRole === 'admin' ? 'Admin' : 'Editor'} role. User must have 2FA (TOTP or Passkey) enabled first.`);
+      throw new Error(`Cannot promote to ${newRole === 'admin' ? 'Admin' : 'Editor'} role. User must have 2FA (TOTP or Passkey) enabled or use SSO first.`);
     }
   }
 
@@ -191,13 +198,14 @@ export async function changePassword(userId, currentPassword, newPassword) {
   return true;
 }
 
-function validatePasswordStrength(password) {
+export function validatePasswordStrength(password, policyOverride) {
+  const policy = policyOverride || configStore.getPasswordPolicy();
   const errors = [];
-  if (password.length < 14) errors.push('at least 14 characters');
-  if (!/[A-Z]/.test(password)) errors.push('1 uppercase letter');
-  if (!/[a-z]/.test(password)) errors.push('1 lowercase letter');
-  if (!/[0-9]/.test(password)) errors.push('1 number');
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('1 special character');
+  if (password.length < policy.minLength) errors.push(`at least ${policy.minLength} characters`);
+  if (policy.requireUppercase && !/[A-Z]/.test(password)) errors.push('1 uppercase letter');
+  if (policy.requireLowercase && !/[a-z]/.test(password)) errors.push('1 lowercase letter');
+  if (policy.requireNumber && !/[0-9]/.test(password)) errors.push('1 number');
+  if (policy.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('1 special character');
   return errors;
 }
 
@@ -845,6 +853,7 @@ export default {
   resetPassword,
   deleteUser,
   validateCredentials,
+  validatePasswordStrength,
   hasRoleLevel,
   getRoleHierarchy,
   updateThemePreference,

@@ -102,6 +102,25 @@
   gap: 4px;
 }
 
+.nav-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.nav-add-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -618,4 +637,132 @@
 /* Light mode specific adjustments */
 [data-theme="light"] .theme-toggle-btn:hover .nav-icon {
   color: #6366f1;
+}
+
+/* ── Workspace Switcher ─────────────────────────────── */
+
+.workspace-switcher {
+  padding: 8px 12px;
+  position: relative;
+}
+
+.workspace-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.workspace-switcher-btn:hover,
+.workspace-switcher-btn.active {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.workspace-switcher-btn .ws-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  color: var(--accent-primary);
+}
+
+.workspace-switcher-btn .ws-name {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-switcher-btn .ws-chevron {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.workspace-switcher-btn .ws-chevron.open {
+  transform: rotate(180deg);
+}
+
+.collapsed .workspace-switcher-btn {
+  justify-content: center;
+  padding: 8px;
+}
+
+.workspace-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.workspace-menu.collapsed-mode {
+  left: 60px;
+  right: auto;
+  width: 220px;
+  top: 0;
+}
+
+.workspace-menu-header {
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.workspace-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.workspace-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-menu-item.active {
+  background: var(--accent-primary-10, rgba(99, 102, 241, 0.1));
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.workspace-menu-item .ws-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-menu-item .ws-item-count {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+  margin-left: 8px;
 }

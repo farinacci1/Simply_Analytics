@@ -31,6 +31,18 @@ const renderBarLabels = (container, labelsData, options) => {
   });
 };
 
+const measureLabelWidth = (labels, fontSize = '11px') => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${fontSize} Outfit, system-ui, sans-serif`;
+  let max = 0;
+  for (const label of labels) {
+    const w = ctx.measureText(truncateLabel(String(label ?? ''), 20)).width;
+    if (w > max) max = w;
+  }
+  return Math.ceil(max);
+};
+
 export const createHorizontalBarChart = (container, config, data, options = {}) => {
   if (!container || !data || data.length === 0) return { update: () => {}, destroy: () => {} };
 
@@ -41,8 +53,15 @@ export const createHorizontalBarChart = (container, config, data, options = {}) 
     ? { top: -10, bottom: -10, left: hideYAxis ? -30 : -10, right: -10 }
     : { top: 0, bottom: 0, left: 0, right: 0 };
 
+  const yField_ = config.x_axis;
+  const labels = yField_ ? data.map(d => d[yField_]).filter(Boolean) : [];
+  const containerWidth = container.getBoundingClientRect().width || 400;
+  const measuredLeft = labels.length > 0 ? measureLabelWidth(labels) + 16 : 80;
+  const maxLeft = Math.round(containerWidth * 0.35);
+  const dynamicLeft = Math.max(60, Math.min(measuredLeft, maxLeft));
+
   const opts = parseChartOptions(container, options, {
-    defaultMargin: options.margin || { top: 20, right: 30, bottom: 35, left: 80 },
+    defaultMargin: options.margin || { top: 20, right: 30, bottom: 35, left: dynamicLeft },
     extraTop: compactOffset.top,
     extraBottom: compactOffset.bottom,
     extraLeft: (hasClusterField ? 40 : 0) + compactOffset.left,

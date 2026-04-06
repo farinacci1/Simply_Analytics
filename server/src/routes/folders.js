@@ -8,12 +8,13 @@ import * as folderService from '../services/folderService.js';
 const router = express.Router();
 
 /**
- * GET /api/folders
+ * GET /api/v1/folders
  * Get all folders for the current user
  */
 router.get('/', async (req, res) => {
   try {
-    const folders = await folderService.getFoldersForUser(req.user.id, req.user.role);
+    const { workspaceId } = req.query;
+    const folders = await folderService.getFoldersForUser(req.user.id, req.user.role, workspaceId || null);
     res.json(folders);
   } catch (error) {
     console.error('Error getting folders:', error);
@@ -22,12 +23,13 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/folders/contents
+ * GET /api/v1/folders/contents
  * Get folder contents (folders + dashboards) at root level
  */
 router.get('/contents', async (req, res) => {
   try {
-    const contents = await folderService.getFolderContents(req.user.id, req.user.role, null);
+    const { workspaceId } = req.query;
+    const contents = await folderService.getFolderContents(req.user.id, req.user.role, null, workspaceId || null);
     res.json(contents);
   } catch (error) {
     console.error('Error getting folder contents:', error);
@@ -36,12 +38,13 @@ router.get('/contents', async (req, res) => {
 });
 
 /**
- * GET /api/folders/:id/contents
+ * GET /api/v1/folders/:id/contents
  * Get folder contents (subfolders + dashboards) for a specific folder
  */
 router.get('/:id/contents', async (req, res) => {
   try {
-    const contents = await folderService.getFolderContents(req.user.id, req.user.role, req.params.id);
+    const { workspaceId } = req.query;
+    const contents = await folderService.getFolderContents(req.user.id, req.user.role, req.params.id, workspaceId || null);
     const folder = await folderService.getFolderById(req.params.id);
     const path = await folderService.getFolderPath(req.params.id);
     
@@ -57,7 +60,7 @@ router.get('/:id/contents', async (req, res) => {
 });
 
 /**
- * GET /api/folders/:id
+ * GET /api/v1/folders/:id
  * Get a specific folder by ID
  */
 router.get('/:id', async (req, res) => {
@@ -76,7 +79,7 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
- * GET /api/folders/:id/path
+ * GET /api/v1/folders/:id/path
  * Get the path (breadcrumb) for a folder
  */
 router.get('/:id/path', async (req, res) => {
@@ -90,17 +93,17 @@ router.get('/:id/path', async (req, res) => {
 });
 
 /**
- * POST /api/folders
+ * POST /api/v1/folders
  * Create a new folder
  */
 router.post('/', async (req, res) => {
   try {
     // Only owners, admins, and editors can create folders
-    if (!['owner', 'admin', 'creator'].includes(req.user.role)) {
+    if (!['owner', 'admin', 'editor'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Insufficient permissions to create folders' });
     }
     
-    const { name, description, parentId, isPublic, icon, color } = req.body;
+    const { name, description, parentId, workspaceId, icon, color } = req.body;
     
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Folder name is required' });
@@ -111,7 +114,7 @@ router.post('/', async (req, res) => {
       description,
       parentId,
       ownerId: req.user.id,
-      isPublic,
+      workspaceId,
       icon,
       color
     });
@@ -119,15 +122,12 @@ router.post('/', async (req, res) => {
     res.status(201).json(folder);
   } catch (error) {
     console.error('Error creating folder:', error);
-    if (error.code === '23505') { // Unique violation
-      return res.status(400).json({ error: 'A folder with this name already exists in this location' });
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * PUT /api/folders/:id
+ * PUT /api/v1/folders/:id
  * Update a folder
  */
 router.put('/:id', async (req, res) => {
@@ -143,29 +143,24 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Insufficient permissions to update this folder' });
     }
     
-    const { name, description, parentId, isPublic, icon, color } = req.body;
+    const { name, description, icon, color } = req.body;
     
     const updated = await folderService.updateFolder(req.params.id, {
       name,
       description,
-      parentId,
-      isPublic,
       icon,
-      color
+      color,
     });
     
     res.json(updated);
   } catch (error) {
     console.error('Error updating folder:', error);
-    if (error.code === '23505') {
-      return res.status(400).json({ error: 'A folder with this name already exists in this location' });
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * DELETE /api/folders/:id
+ * DELETE /api/v1/folders/:id
  * Delete a folder
  */
 router.delete('/:id', async (req, res) => {
@@ -190,12 +185,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/folders/search
+ * POST /api/v1/folders/search
  * Search folders and dashboards
  */
 router.post('/search', async (req, res) => {
   try {
-    const { query: searchTerm } = req.body;
+    const { query: searchTerm, workspaceId } = req.body;
     
     if (!searchTerm || searchTerm.trim().length < 2) {
       return res.json({ folders: [], dashboards: [] });
@@ -204,7 +199,8 @@ router.post('/search', async (req, res) => {
     const results = await folderService.searchFoldersAndDashboards(
       req.user.id,
       req.user.role,
-      searchTerm.trim()
+      searchTerm.trim(),
+      workspaceId || null
     );
     
     res.json(results);
@@ -215,7 +211,7 @@ router.post('/search', async (req, res) => {
 });
 
 /**
- * PUT /api/folders/move-dashboard/:dashboardId
+ * PUT /api/v1/folders/move-dashboard/:dashboardId
  * Move a dashboard to a folder
  */
 router.put('/move-dashboard/:dashboardId', async (req, res) => {
@@ -234,73 +230,6 @@ router.put('/move-dashboard/:dashboardId', async (req, res) => {
     res.json(updated);
   } catch (error) {
     console.error('Error moving dashboard:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// FOLDER ACCESS MANAGEMENT
-// ============================================
-
-/**
- * GET /api/folders/:id/access
- * Get groups with access to a folder
- */
-router.get('/:id/access', async (req, res) => {
-  try {
-    const groups = await folderService.getFolderGroups(req.params.id);
-    res.json({ groups });
-  } catch (error) {
-    console.error('Error getting folder access:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/folders/:id/access
- * Grant a group access to a folder
- */
-router.post('/:id/access', async (req, res) => {
-  try {
-    // Only folder owner or admin can grant access
-    if (!['owner', 'admin'].includes(req.user.role)) {
-      const folder = await folderService.getFolderById(req.params.id);
-      if (!folder || folder.owner_id !== req.user.id) {
-        return res.status(403).json({ error: 'Only folder owner or admin can manage access' });
-      }
-    }
-    
-    const { groupId } = req.body;
-    if (!groupId) {
-      return res.status(400).json({ error: 'Group ID is required' });
-    }
-    
-    await folderService.grantFolderAccess(req.params.id, groupId, req.user.id);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error granting folder access:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * DELETE /api/folders/:id/access/:groupId
- * Revoke a group's access to a folder
- */
-router.delete('/:id/access/:groupId', async (req, res) => {
-  try {
-    // Only folder owner or admin can revoke access
-    if (!['owner', 'admin'].includes(req.user.role)) {
-      const folder = await folderService.getFolderById(req.params.id);
-      if (!folder || folder.owner_id !== req.user.id) {
-        return res.status(403).json({ error: 'Only folder owner or admin can manage access' });
-      }
-    }
-    
-    await folderService.revokeFolderAccess(req.params.id, req.params.groupId);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error revoking folder access:', error);
     res.status(500).json({ error: error.message });
   }
 });

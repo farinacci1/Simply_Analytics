@@ -54,6 +54,27 @@
   z-index: 50;
 }
 
+.dashboard-widget.grid-stack-item > .widget-loading-clip {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  right: 5px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.dashboard-widget.grid-stack-item > .widget-loading-clip > .widget-loading-bar {
+  position: relative;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  border-radius: 0;
+}
+
 .dashboard-widget.grid-layout-widget {
   /* Additional grid layout specific styles */
 }
@@ -526,18 +547,23 @@
 }
 
 .widget-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
+  position: fixed;
   min-width: 150px;
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   padding: 4px;
-  z-index: 100;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.1);
   animation: slideDown 0.15s ease forwards;
+}
+
+[data-theme="dark"] .widget-menu {
+  background: #1e1e24;
+}
+
+[data-theme="light"] .widget-menu {
+  background: #ffffff;
 }
 
 .widget-menu button {
