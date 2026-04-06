@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import {
-  FiGrid,
   FiHelpCircle,
   FiChevronLeft,
   FiChevronRight,
@@ -14,6 +13,10 @@ import {
   FiSettings,
   FiSun,
   FiMoon,
+  FiShield,
+  FiChevronDown,
+  FiLayers,
+  FiPlus,
 } from 'react-icons/fi';
 import SimplyLogo from '../assets/Simply_Logo.png';
 import '../styles/SideNav.css';
@@ -25,8 +28,9 @@ const COLLAPSED_WIDTH = 60;
 // Map view IDs to routes
 const viewToRoute = {
   home: '/',
-  dashboards: '/dashboards',
+  workspaces: '/workspaces',
   users: '/users',
+  admin: '/admin',
   settings: '/settings',
   models: '/models',
 };
@@ -40,6 +44,10 @@ const SideNav = ({ onSignIn }) => {
     isAuthenticated,
     theme,
     toggleTheme,
+    emergencyMode,
+    workspaces,
+    activeWorkspace,
+    switchWorkspace,
   } = useAppStore();
   
   const navigate = useNavigate();
@@ -48,8 +56,10 @@ const SideNav = ({ onSignIn }) => {
   const [width, setWidth] = useState(220);
   const [isResizing, setIsResizing] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [wsMenuOpen, setWsMenuOpen] = useState(false);
   const sidebarRef = useRef(null);
   const userMenuRef = useRef(null);
+  const wsMenuRef = useRef(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
@@ -57,12 +67,19 @@ const SideNav = ({ onSignIn }) => {
   
   // Navigate to a view using the router
   const navigateTo = (viewId) => {
+    if (viewId === 'workspaces' && activeWorkspace?.id) {
+      navigate(`/workspaces/${activeWorkspace.id}`);
+      return;
+    }
     const route = viewToRoute[viewId] || '/';
     navigate(route);
   };
   
   // Check if a nav item is active based on current path
   const isNavActive = (viewId) => {
+    if (viewId === 'workspaces') {
+      return location.pathname.startsWith('/workspaces');
+    }
     const route = viewToRoute[viewId];
     if (route === '/') {
       return location.pathname === '/' || location.pathname === '/home';
@@ -70,31 +87,38 @@ const SideNav = ({ onSignIn }) => {
     return location.pathname.startsWith(route);
   };
 
-  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setUserMenuOpen(false);
       }
+      if (wsMenuRef.current && !wsMenuRef.current.contains(e.target)) {
+        setWsMenuOpen(false);
+      }
     };
-    if (userMenuOpen) {
+    if (userMenuOpen || wsMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [userMenuOpen]);
+  }, [userMenuOpen, wsMenuOpen]);
 
   // Build nav items based on authentication and user role
   const navItems = [];
   
   if (!isAuthenticated) {
-    // Not signed in: only show Home
     navItems.push({ id: 'home', icon: FiHome, label: 'Home' });
+  } else if (currentRole === 'bootstrap_admin' || emergencyMode) {
+    // Bootstrap admin during provisioning or emergency mode — only Admin tab
+    navItems.push({ id: 'admin', icon: FiShield, label: 'Admin' });
   } else {
-    navItems.push({ id: 'dashboards', icon: FiGrid, label: 'Dashboards' });
-    
-    // Add Users tab for owners and admins
+    navItems.push({ id: 'workspaces', icon: FiLayers, label: 'Workspaces' });
+
     if (['owner', 'admin'].includes(currentRole)) {
       navItems.push({ id: 'users', icon: FiUsers, label: 'Users' });
+    }
+
+    if (currentRole === 'owner') {
+      navItems.push({ id: 'admin', icon: FiShield, label: 'Admin' });
     }
   }
 
@@ -162,6 +186,47 @@ const SideNav = ({ onSignIn }) => {
         </div>
       </div>
 
+      {isAuthenticated && currentRole !== 'bootstrap_admin' && !emergencyMode && workspaces.length > 0 && (
+        <div className="workspace-switcher" ref={wsMenuRef}>
+          <button
+            className={`workspace-switcher-btn ${wsMenuOpen ? 'active' : ''}`}
+            onClick={() => setWsMenuOpen(!wsMenuOpen)}
+            title={isCollapsed ? (activeWorkspace?.name || 'Select workspace') : undefined}
+          >
+            <FiLayers className="ws-icon" />
+            {!isCollapsed && (
+              <>
+                <span className="ws-name">{activeWorkspace?.name || 'Select workspace'}</span>
+                <FiChevronDown className={`ws-chevron ${wsMenuOpen ? 'open' : ''}`} />
+              </>
+            )}
+          </button>
+          {wsMenuOpen && (
+            <div className={`workspace-menu ${isCollapsed ? 'collapsed-mode' : ''}`}>
+              <div className="workspace-menu-header">Workspaces</div>
+              {workspaces.map(ws => (
+                <button
+                  key={ws.id}
+                  className={`workspace-menu-item ${activeWorkspace?.id === ws.id ? 'active' : ''}`}
+                  onClick={() => {
+                    switchWorkspace(ws);
+                    setWsMenuOpen(false);
+                    if (location.pathname.startsWith('/workspaces')) {
+                      navigate(`/workspaces/${ws.id}`);
+                    }
+                  }}
+                >
+                  <span className="ws-item-name">{ws.name}</span>
+                  {ws.member_count != null && (
+                    <span className="ws-item-count">{ws.member_count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <nav className="sidebar-nav">
         {navItems.map(({ id, icon: Icon, label }) => (
           <button
@@ -171,15 +236,33 @@ const SideNav = ({ onSignIn }) => {
             title={isCollapsed ? label : undefined}
           >
             <Icon className="nav-icon" />
-            {!isCollapsed && <span className="nav-label">{label}</span>}
+            {!isCollapsed && (
+              <>
+                <span className="nav-label">{label}</span>
+                {id === 'workspaces' && ['owner', 'admin'].includes(currentRole) && (
+                  <span
+                    className="nav-add-btn"
+                    role="button"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/workspaces?create=1');
+                    }}
+                    title="New Workspace"
+                  >
+                    <FiPlus />
+                  </span>
+                )}
+              </>
+            )}
           </button>
         ))}
       </nav>
 
       <div className="sidebar-footer">
-        {!isCollapsed && (
+        {!isCollapsed && activeWorkspace && (
           <div className="sidebar-info">
-            <p>Connections configured per-dashboard</p>
+            <p>{activeWorkspace.connection_count > 0 ? `${activeWorkspace.connection_count} connection${activeWorkspace.connection_count != 1 ? 's' : ''}` : 'No connections'}</p>
           </div>
         )}
         <button className="nav-item help-btn" title={isCollapsed ? 'Help' : undefined}>
@@ -193,12 +276,12 @@ const SideNav = ({ onSignIn }) => {
             <button 
               className={`nav-item user-btn ${userMenuOpen ? 'active' : ''}`}
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              title={isCollapsed ? `${currentUser} (${currentRole})` : undefined}
+              title={isCollapsed ? `${currentUser?.username} (${currentRole})` : undefined}
             >
               <FiUser className="nav-icon" />
               {!isCollapsed && (
                 <div className="user-info">
-                  <span className="user-name">{currentUser?.split('@')[0] || 'User'}</span>
+                  <span className="user-name">{currentUser?.displayName || currentUser?.display_name || currentUser?.username || 'User'}</span>
                   <span className="user-role">{currentRole}</span>
                 </div>
               )}
@@ -208,7 +291,7 @@ const SideNav = ({ onSignIn }) => {
               <div className={`user-menu-popup ${isCollapsed ? 'collapsed-mode' : ''}`}>
                 <div className="user-menu-section">
                   <div className="user-menu-header">
-                    {currentUser}
+                    {currentUser?.username}
                   </div>
                   <div className="user-menu-role">
                     Role: <strong>{currentRole}</strong>

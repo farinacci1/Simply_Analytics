@@ -8,6 +8,7 @@
 
 import { Router } from 'express';
 import dashboardServicePg from '../services/dashboardServicePg.js';
+const dashboardService = dashboardServicePg;
 import { query } from '../db/db.js';
 import yaml from 'js-yaml';
 
@@ -25,20 +26,21 @@ function isAuthenticated(req) {
 }
 
 /**
- * Check if user has MFA enabled
+ * Check if user has MFA enabled (or is SSO-provisioned)
  */
 async function hasMfaEnabled(userId) {
   const result = await query(`
-    SELECT totp_enabled, passkey_enabled, mfa_bypass_until
+    SELECT totp_enabled, passkey_enabled, mfa_bypass_until, auth_provider
     FROM users WHERE id = $1
   `, [userId]);
   
   const user = result.rows[0];
   if (!user) return false;
+
+  if (user.auth_provider === 'saml') return true;
   
-  // Check if MFA is bypassed temporarily
   if (user.mfa_bypass_until && new Date(user.mfa_bypass_until) > new Date()) {
-    return true; // Temporarily bypassed, allow access
+    return true;
   }
   
   return user.totp_enabled || user.passkey_enabled;
@@ -72,7 +74,7 @@ async function requireMfaForEdit(req, res, next) {
   }
   
   // Elevated roles (editor, admin, owner) must have MFA to create/edit
-  if (['creator', 'admin', 'owner'].includes(req.user.role)) {
+  if (['editor', 'admin', 'owner'].includes(req.user.role)) {
     const hasMfa = await hasMfaEnabled(req.user.id);
     if (!hasMfa) {
       return res.status(403).json({ 
@@ -124,13 +126,13 @@ function mapDashboardForFrontend(dashboard) {
 }
 
 /**
- * GET /api/dashboard
+ * GET /api/v1/dashboard
  * Get all accessible dashboards
  */
 dashboardRoutes.get('/', requireMfaForView, async (req, res, next) => {
   try {
-    
-    const dashboards = await dashboardServicePg.getDashboardsForUser(req.user.id, req.user.role);
+    const { workspaceId } = req.query;
+    const dashboards = await dashboardServicePg.getDashboardsForUser(req.user.id, req.user.role, workspaceId || null);
     res.json({ dashboards: dashboards.map(mapDashboardForFrontend) });
   } catch (error) {
     next(error);
@@ -138,7 +140,7 @@ dashboardRoutes.get('/', requireMfaForView, async (req, res, next) => {
 });
 
 /**
- * GET /api/dashboard/:id
+ * GET /api/v1/dashboard/:id
  * Get a specific dashboard
  */
 dashboardRoutes.get('/:id', requireMfaForView, async (req, res, next) => {
@@ -171,7 +173,7 @@ dashboardRoutes.get('/:id', requireMfaForView, async (req, res, next) => {
 });
 
 /**
- * POST /api/dashboard/:id/init-session
+ * POST /api/v1/dashboard/:id/init-session
  * Initialize a Snowflake session for a dashboard
  * This establishes the connection with the dashboard's warehouse and role
  * Call this when opening a dashboard to ensure the session is ready for queries
@@ -194,18 +196,37 @@ dashboardRoutes.post('/:id/init-session', requireMfaForView, async (req, res, ne
       return res.status(404).json({ error: 'Dashboard not found' });
     }
     
-    // Import connection service to initialize the session
     const { getCachedDashboardConnection } = await import('../services/connectionService.js');
     
     try {
-      // Initialize connection with dashboard's warehouse and role
+      // Resolve connection: dashboard's own or workspace's
+      let connId = dashboard.connection_id;
+      let wsWarehouse = dashboard.warehouse;
+      let wsRole = dashboard.role;
+
+      if (!connId && dashboard.workspace_id) {
+        const wsResult = await query(
+          'SELECT connection_id, warehouse, role FROM workspace_connections WHERE workspace_id = $1 ORDER BY added_at ASC LIMIT 1',
+          [dashboard.workspace_id],
+        );
+        if (wsResult.rows.length > 0) {
+          connId = wsResult.rows[0].connection_id;
+          wsWarehouse = wsWarehouse || wsResult.rows[0].warehouse;
+          wsRole = wsRole || wsResult.rows[0].role;
+        }
+      }
+
+      if (!connId) {
+        return res.status(400).json({ success: false, error: 'No connection configured', code: 'NO_CONNECTION' });
+      }
+
       const connection = await getCachedDashboardConnection(
-        dashboard.connection_id,
+        connId,
         req.user.id,
         req.user.sessionId,
         {
-          role: dashboard.role,
-          warehouse: dashboard.warehouse,
+          role: wsRole,
+          warehouse: wsWarehouse,
         }
       );
       
@@ -231,7 +252,7 @@ dashboardRoutes.post('/:id/init-session', requireMfaForView, async (req, res, ne
 });
 
 /**
- * POST /api/dashboard
+ * POST /api/v1/dashboard
  * Create a new dashboard
  * REQUIRES: User must be authenticated and have a stored Snowflake connection
  */
@@ -244,7 +265,7 @@ dashboardRoutes.post('/', requireMfaForEdit, async (req, res, next) => {
       });
     }
 
-    const { name, description, connectionId, warehouse, role, visibility, yamlDefinition, semanticViewsReferenced } = req.body;
+    const { name, description, connectionId, warehouse, role, visibility, yamlDefinition, semanticViewsReferenced, workspaceId } = req.body;
     
     if (!name || !name.trim()) {
       return res.status(400).json({ 
@@ -253,10 +274,10 @@ dashboardRoutes.post('/', requireMfaForEdit, async (req, res, next) => {
       });
     }
     
-    if (!connectionId) {
+    if (!workspaceId) {
       return res.status(400).json({ 
         success: false,
-        error: 'Snowflake connection is required' 
+        error: 'Workspace is required to create a dashboard' 
       });
     }
 
@@ -287,11 +308,12 @@ dashboardRoutes.post('/', requireMfaForEdit, async (req, res, next) => {
     const dashboardData = {
       name: name.trim(),
       description: description || '',
-      connectionId,
+      connectionId: connectionId || null,
       warehouse: warehouse || null,
       role: role || null,
       visibility: visibility || 'private',
       yamlDefinition: initialYaml || null,
+      workspaceId: workspaceId || null,
     };
 
     const dashboard = await dashboardServicePg.createDashboard(dashboardData, req.user.id);
@@ -311,7 +333,7 @@ dashboardRoutes.post('/', requireMfaForEdit, async (req, res, next) => {
 });
 
 /**
- * PUT /api/dashboard/:id
+ * PUT /api/v1/dashboard/:id
  * Update a dashboard
  */
 dashboardRoutes.put('/:id', requireMfaForEdit, async (req, res, next) => {
@@ -374,7 +396,7 @@ dashboardRoutes.put('/:id', requireMfaForEdit, async (req, res, next) => {
 });
 
 /**
- * DELETE /api/dashboard/:id
+ * DELETE /api/v1/dashboard/:id
  * Delete a dashboard (only owner or admin)
  */
 dashboardRoutes.delete('/:id', requireMfaForEdit, async (req, res, next) => {
@@ -396,7 +418,7 @@ dashboardRoutes.delete('/:id', requireMfaForEdit, async (req, res, next) => {
 });
 
 /**
- * GET /api/dashboard/:id/groups
+ * GET /api/v1/dashboard/:id/groups
  * Get all groups with access to a dashboard
  */
 dashboardRoutes.get('/:id/groups', requireMfaForView, async (req, res, next) => {
@@ -411,7 +433,7 @@ dashboardRoutes.get('/:id/groups', requireMfaForView, async (req, res, next) => 
 });
 
 /**
- * POST /api/dashboard/:id/groups
+ * POST /api/v1/dashboard/:id/groups
  * Grant group access to a dashboard
  */
 dashboardRoutes.post('/:id/groups', requireMfaForEdit, async (req, res, next) => {
@@ -431,7 +453,7 @@ dashboardRoutes.post('/:id/groups', requireMfaForEdit, async (req, res, next) =>
 });
 
 /**
- * PUT /api/dashboard/:id/groups
+ * PUT /api/v1/dashboard/:id/groups
  * Update all group access for a dashboard (replaces existing)
  */
 dashboardRoutes.put('/:id/groups', requireMfaForEdit, async (req, res, next) => {
@@ -451,7 +473,7 @@ dashboardRoutes.put('/:id/groups', requireMfaForEdit, async (req, res, next) => 
 });
 
 /**
- * DELETE /api/dashboard/:id/groups/:groupId
+ * DELETE /api/v1/dashboard/:id/groups/:groupId
  * Revoke group access from a dashboard
  */
 dashboardRoutes.delete('/:id/groups/:groupId', requireMfaForEdit, async (req, res, next) => {
@@ -466,7 +488,7 @@ dashboardRoutes.delete('/:id/groups/:groupId', requireMfaForEdit, async (req, re
 });
 
 /**
- * POST /api/dashboard/:id/clone
+ * POST /api/v1/dashboard/:id/clone
  * Clone a dashboard
  */
 dashboardRoutes.post('/:id/clone', requireMfaForEdit, async (req, res, next) => {
@@ -495,7 +517,7 @@ dashboardRoutes.post('/:id/clone', requireMfaForEdit, async (req, res, next) => 
 });
 
 /**
- * GET /api/dashboard/:id/export
+ * GET /api/v1/dashboard/:id/export
  * Export dashboard as YAML
  */
 dashboardRoutes.get('/:id/export', requireMfaForView, async (req, res, next) => {
@@ -517,7 +539,7 @@ dashboardRoutes.get('/:id/export', requireMfaForView, async (req, res, next) => 
 });
 
 /**
- * POST /api/dashboard/import
+ * POST /api/v1/dashboard/import
  * Import dashboard from YAML
  */
 dashboardRoutes.post('/import', requireMfaForEdit, async (req, res, next) => {
@@ -547,7 +569,7 @@ dashboardRoutes.post('/import', requireMfaForEdit, async (req, res, next) => {
 });
 
 /**
- * POST /api/dashboard/:id/tab/:tabId/widget
+ * POST /api/v1/dashboard/:id/tab/:tabId/widget
  * Add a widget to a dashboard tab
  */
 dashboardRoutes.post('/:id/tab/:tabId/widget', requireMfaForEdit, async (req, res, next) => {
@@ -578,7 +600,7 @@ dashboardRoutes.post('/:id/tab/:tabId/widget', requireMfaForEdit, async (req, re
 });
 
 /**
- * PUT /api/dashboard/:id/widget/:widgetId
+ * PUT /api/v1/dashboard/:id/widget/:widgetId
  * Update a widget
  */
 dashboardRoutes.put('/:id/widget/:widgetId', requireMfaForEdit, async (req, res, next) => {
@@ -609,7 +631,7 @@ dashboardRoutes.put('/:id/widget/:widgetId', requireMfaForEdit, async (req, res,
 });
 
 /**
- * DELETE /api/dashboard/:id/widget/:widgetId
+ * DELETE /api/v1/dashboard/:id/widget/:widgetId
  * Delete a widget
  */
 dashboardRoutes.delete('/:id/widget/:widgetId', requireMfaForEdit, async (req, res, next) => {

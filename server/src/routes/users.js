@@ -7,11 +7,45 @@
 import { Router } from 'express';
 import userService from '../services/userService.js';
 import twoFactorService from '../services/twoFactorService.js';
+import { query } from '../db/db.js';
 
 export const userRoutes = Router();
 
 /**
- * GET /api/users
+ * Middleware: Require MFA (or SSO) for admin-level user management operations.
+ * All roles (including owner) must have MFA enabled or be SSO-provisioned.
+ */
+async function requireMfaForAdminAction(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const result = await query(`
+    SELECT totp_enabled, passkey_enabled, mfa_bypass_until, auth_provider
+    FROM users WHERE id = $1
+  `, [req.user.id]);
+
+  const user = result.rows[0];
+  if (!user) return res.status(401).json({ error: 'User not found' });
+
+  if (user.auth_provider === 'saml') return next();
+
+  if (user.mfa_bypass_until && new Date(user.mfa_bypass_until) > new Date()) {
+    return next();
+  }
+
+  if (user.totp_enabled || user.passkey_enabled) {
+    return next();
+  }
+
+  return res.status(403).json({
+    error: 'Multi-factor authentication is required to manage users. Please set up MFA in your settings.',
+    code: 'MFA_REQUIRED',
+  });
+}
+
+/**
+ * GET /api/v1/users
  * Get all users (admin/owner only)
  */
 userRoutes.get('/', async (req, res) => {
@@ -31,7 +65,223 @@ userRoutes.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/users/:id
+ * GET /api/v1/users/lookup?email=
+ * Look up a user by exact email. Available to any authenticated user.
+ * Returns { user: { id, username, display_name, email, role } } or 404.
+ */
+userRoutes.get('/lookup', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: 'Email query parameter required' });
+
+    const found = await userService.getUserByEmail(email.trim().toLowerCase());
+    if (!found) return res.status(404).json({ error: 'No user found with that email' });
+
+    res.json({
+      user: {
+        id: found.id,
+        username: found.username,
+        display_name: found.display_name,
+        email: found.email,
+        role: found.role,
+      },
+    });
+  } catch (error) {
+    console.error('User lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/users/me/default-workspace
+ * Get the authenticated user's default workspace ID
+ */
+userRoutes.get('/me/default-workspace', async (req, res) => {
+  try {
+    const result = await query('SELECT default_workspace_id FROM users WHERE id = $1', [req.user.id]);
+    res.json({ defaultWorkspaceId: result.rows[0]?.default_workspace_id || null });
+  } catch (error) {
+    console.error('Get default workspace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/v1/users/me/default-workspace
+ * Set the authenticated user's default workspace
+ */
+userRoutes.put('/me/default-workspace', async (req, res) => {
+  try {
+    const { workspaceId } = req.body;
+    if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required' });
+
+    const membership = await query(
+      'SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2',
+      [workspaceId, req.user.id]
+    );
+    const isAdminRole = ['owner', 'admin'].includes(req.user.role);
+    if (membership.rows.length === 0 && !isAdminRole) {
+      return res.status(403).json({ error: 'You are not a member of this workspace' });
+    }
+
+    await query('UPDATE users SET default_workspace_id = $1 WHERE id = $2', [workspaceId, req.user.id]);
+    res.json({ success: true, defaultWorkspaceId: workspaceId });
+  } catch (error) {
+    console.error('Set default workspace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/users/me/theme
+ * Get current user's theme preference
+ */
+userRoutes.get('/me/theme', async (req, res) => {
+  try {
+    const { user } = req;
+    const theme = await userService.getThemePreference(user.id);
+    res.json({ theme });
+  } catch (error) {
+    console.error('Get theme error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/v1/users/me/theme
+ * Update current user's theme preference
+ */
+userRoutes.put('/me/theme', async (req, res) => {
+  try {
+    const { user } = req;
+    const { theme } = req.body;
+
+    if (!theme || !['light', 'dark'].includes(theme)) {
+      return res.status(400).json({ error: 'Invalid theme. Must be "light" or "dark"' });
+    }
+
+    const updatedTheme = await userService.updateThemePreference(user.id, theme);
+    res.json({ theme: updatedTheme, success: true });
+  } catch (error) {
+    console.error('Update theme error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// COLOR SCHEMES
+// ============================================
+
+/**
+ * GET /api/v1/users/color-schemes
+ * Get user's saved color schemes
+ */
+userRoutes.get('/color-schemes', async (req, res) => {
+  try {
+    const { user } = req;
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const colorSchemes = await userService.getColorSchemes(user.id);
+    res.json({ colorSchemes });
+  } catch (error) {
+    console.error('Get color schemes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/v1/users/color-schemes
+ * Save user's color schemes (replaces all)
+ */
+userRoutes.put('/color-schemes', async (req, res) => {
+  try {
+    const { user } = req;
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const { colorSchemes } = req.body;
+    
+    if (!Array.isArray(colorSchemes)) {
+      return res.status(400).json({ error: 'colorSchemes must be an array' });
+    }
+    
+    const saved = await userService.saveColorSchemes(user.id, colorSchemes);
+    res.json({ colorSchemes: saved, success: true });
+  } catch (error) {
+    console.error('Save color schemes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/users/preferences
+ * Get all user preferences
+ */
+userRoutes.get('/preferences', async (req, res) => {
+  try {
+    const { user } = req;
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const preferences = await userService.getUserPreferences(user.id);
+    res.json(preferences);
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/users/transfer-ownership
+ * Transfer owner role to another user (owner only, requires MFA)
+ * This is an irreversible action - the current owner becomes admin
+ */
+userRoutes.post('/transfer-ownership', requireMfaForAdminAction, async (req, res) => {
+  try {
+    const { user } = req;
+    const { newOwnerId } = req.body;
+
+    if (user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only the owner can transfer ownership' });
+    }
+
+    if (!newOwnerId) {
+      return res.status(400).json({ error: 'New owner ID is required' });
+    }
+
+    const targetUser = await userService.getUserById(newOwnerId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
+    if (targetUser.id === user.userId) {
+      return res.status(400).json({ error: 'Cannot transfer ownership to yourself' });
+    }
+
+    if (!targetUser.is_active) {
+      return res.status(400).json({ error: 'Cannot transfer ownership to an inactive user' });
+    }
+
+    if (targetUser.role !== 'admin') {
+      return res.status(400).json({ error: 'Ownership can only be transferred to administrators' });
+    }
+
+    await userService.transferOwnership(user.userId, newOwnerId);
+    console.log(`Ownership transferred from ${user.username} to ${targetUser.username}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Ownership transferred to ${targetUser.username}` 
+    });
+  } catch (error) {
+    console.error('Transfer ownership error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/users/:id
  * Get user by ID
  */
 userRoutes.get('/:id', async (req, res) => {
@@ -39,7 +289,6 @@ userRoutes.get('/:id', async (req, res) => {
     const { user } = req;
     const { id } = req.params;
 
-    // Users can view their own profile, admins can view anyone
     if (user.id !== id && !['owner', 'admin'].includes(user.role)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -57,26 +306,22 @@ userRoutes.get('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/users
- * Create a new user (admin/owner only)
+ * POST /api/v1/users
+ * Create a new user (admin/owner only, requires MFA)
  */
-userRoutes.post('/', async (req, res) => {
+userRoutes.post('/', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { username, email, password, displayName, role } = req.body;
 
-    // Only owner and admin can create users
     if (!['owner', 'admin'].includes(user.role)) {
       return res.status(403).json({ error: 'Only administrators can create users' });
     }
 
-    // Validate role assignment permissions
-    // Admin can create creator and viewer, but not owner or admin
     if (user.role === 'admin' && ['owner', 'admin'].includes(role)) {
       return res.status(403).json({ error: 'Admins can only create editor or viewer users' });
     }
 
-    // Check if username/email already exists
     const existingUsername = await userService.getUserByUsername(username);
     if (existingUsername) {
       return res.status(400).json({ error: 'Username already exists' });
@@ -104,7 +349,7 @@ userRoutes.post('/', async (req, res) => {
 });
 
 /**
- * PUT /api/users/:id
+ * PUT /api/v1/users/:id
  * Update user details
  */
 userRoutes.put('/:id', async (req, res) => {
@@ -127,10 +372,10 @@ userRoutes.put('/:id', async (req, res) => {
 });
 
 /**
- * PUT /api/users/:id/role
- * Update user role (with permission checks)
+ * PUT /api/v1/users/:id/role
+ * Update user role (with permission checks, requires MFA)
  */
-userRoutes.put('/:id/role', async (req, res) => {
+userRoutes.put('/:id/role', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -150,7 +395,7 @@ userRoutes.put('/:id/role', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/change-password
+ * POST /api/v1/users/:id/change-password
  * Change user's own password
  */
 userRoutes.post('/:id/change-password', async (req, res) => {
@@ -173,7 +418,7 @@ userRoutes.post('/:id/change-password', async (req, res) => {
 });
 
 /**
- * PUT /api/users/:id/email
+ * PUT /api/v1/users/:id/email
  * Update user's email address
  */
 userRoutes.put('/:id/email', async (req, res) => {
@@ -202,10 +447,10 @@ userRoutes.put('/:id/email', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/reset-password
- * Reset user password (admin action)
+ * POST /api/v1/users/:id/reset-password
+ * Reset user password (admin action, requires MFA)
  */
-userRoutes.post('/:id/reset-password', async (req, res) => {
+userRoutes.post('/:id/reset-password', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -224,10 +469,10 @@ userRoutes.post('/:id/reset-password', async (req, res) => {
 });
 
 /**
- * DELETE /api/users/:id
- * Delete user (owner and admin only, with role hierarchy)
+ * DELETE /api/v1/users/:id
+ * Delete user (owner and admin only, with role hierarchy, requires MFA)
  */
-userRoutes.delete('/:id', async (req, res) => {
+userRoutes.delete('/:id', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -245,167 +490,12 @@ userRoutes.delete('/:id', async (req, res) => {
   }
 });
 
-/**
- * POST /api/users/transfer-ownership
- * Transfer owner role to another user (owner only)
- * This is an irreversible action - the current owner becomes admin
- */
-userRoutes.post('/transfer-ownership', async (req, res) => {
-  try {
-    const { user } = req;
-    const { newOwnerId } = req.body;
-
-    // Only the current owner can transfer ownership
-    if (user.role !== 'owner') {
-      return res.status(403).json({ error: 'Only the owner can transfer ownership' });
-    }
-
-    if (!newOwnerId) {
-      return res.status(400).json({ error: 'New owner ID is required' });
-    }
-
-    // Get the target user
-    const targetUser = await userService.getUserById(newOwnerId);
-    if (!targetUser) {
-      return res.status(404).json({ error: 'Target user not found' });
-    }
-
-    // Can't transfer to self
-    if (targetUser.id === user.userId) {
-      return res.status(400).json({ error: 'Cannot transfer ownership to yourself' });
-    }
-
-    // Can't transfer to an inactive user
-    if (!targetUser.is_active) {
-      return res.status(400).json({ error: 'Cannot transfer ownership to an inactive user' });
-    }
-
-    // Can only transfer to admins
-    if (targetUser.role !== 'admin') {
-      return res.status(400).json({ error: 'Ownership can only be transferred to administrators' });
-    }
-
-    // Perform the transfer
-    await userService.transferOwnership(user.userId, newOwnerId);
-
-    console.log(`Ownership transferred from ${user.username} to ${targetUser.username}`);
-    
-    res.json({ 
-      success: true, 
-      message: `Ownership transferred to ${targetUser.username}` 
-    });
-  } catch (error) {
-    console.error('Transfer ownership error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/users/me/theme
- * Get current user's theme preference
- */
-userRoutes.get('/me/theme', async (req, res) => {
-  try {
-    const { user } = req;
-    const theme = await userService.getThemePreference(user.id);
-    res.json({ theme });
-  } catch (error) {
-    console.error('Get theme error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * PUT /api/users/me/theme
- * Update current user's theme preference
- */
-userRoutes.put('/me/theme', async (req, res) => {
-  try {
-    const { user } = req;
-    const { theme } = req.body;
-
-    if (!theme || !['light', 'dark'].includes(theme)) {
-      return res.status(400).json({ error: 'Invalid theme. Must be "light" or "dark"' });
-    }
-
-    const updatedTheme = await userService.updateThemePreference(user.id, theme);
-    res.json({ theme: updatedTheme, success: true });
-  } catch (error) {
-    console.error('Update theme error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// COLOR SCHEMES
-// ============================================
-
-/**
- * GET /api/users/color-schemes
- * Get user's saved color schemes
- */
-userRoutes.get('/color-schemes', async (req, res) => {
-  try {
-    const { user } = req;
-    if (!user) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    const colorSchemes = await userService.getColorSchemes(user.id);
-    res.json({ colorSchemes });
-  } catch (error) {
-    console.error('Get color schemes error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * PUT /api/users/color-schemes
- * Save user's color schemes (replaces all)
- */
-userRoutes.put('/color-schemes', async (req, res) => {
-  try {
-    const { user } = req;
-    if (!user) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    const { colorSchemes } = req.body;
-    
-    if (!Array.isArray(colorSchemes)) {
-      return res.status(400).json({ error: 'colorSchemes must be an array' });
-    }
-    
-    const saved = await userService.saveColorSchemes(user.id, colorSchemes);
-    res.json({ colorSchemes: saved, success: true });
-  } catch (error) {
-    console.error('Save color schemes error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/users/preferences
- * Get all user preferences
- */
-userRoutes.get('/preferences', async (req, res) => {
-  try {
-    const { user } = req;
-    if (!user) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    const preferences = await userService.getUserPreferences(user.id);
-    res.json(preferences);
-  } catch (error) {
-    console.error('Get preferences error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ============================================
 // 2FA ADMIN MANAGEMENT
 // ============================================
 
 /**
- * GET /api/users/:id/2fa-status
+ * GET /api/v1/users/:id/2fa-status
  * Get a user's 2FA status (admin only)
  */
 userRoutes.get('/:id/2fa-status', async (req, res) => {
@@ -427,10 +517,10 @@ userRoutes.get('/:id/2fa-status', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/unlock
- * Unlock a user's account (admin/owner only)
+ * POST /api/v1/users/:id/unlock
+ * Unlock a user's account (admin/owner only, requires MFA)
  */
-userRoutes.post('/:id/unlock', async (req, res) => {
+userRoutes.post('/:id/unlock', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -468,10 +558,10 @@ userRoutes.post('/:id/unlock', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/2fa-grace
- * Set or extend a user's 2FA grace period (admin/owner only)
+ * POST /api/v1/users/:id/2fa-grace
+ * Set or extend a user's 2FA grace period (admin/owner only, requires MFA)
  */
-userRoutes.post('/:id/2fa-grace', async (req, res) => {
+userRoutes.post('/:id/2fa-grace', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -500,10 +590,10 @@ userRoutes.post('/:id/2fa-grace', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/2fa-requirement
- * Set whether 2FA is required for a user (admin/owner only)
+ * POST /api/v1/users/:id/2fa-requirement
+ * Set whether 2FA is required for a user (admin/owner only, requires MFA)
  */
-userRoutes.post('/:id/2fa-requirement', async (req, res) => {
+userRoutes.post('/:id/2fa-requirement', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -528,10 +618,10 @@ userRoutes.post('/:id/2fa-requirement', async (req, res) => {
 });
 
 /**
- * DELETE /api/users/:id/2fa
- * Reset a user's 2FA (remove all methods) - admin only, for recovery
+ * DELETE /api/v1/users/:id/2fa
+ * Reset a user's 2FA (remove all methods) - owner only, for recovery, requires MFA
  */
-userRoutes.delete('/:id/2fa', async (req, res) => {
+userRoutes.delete('/:id/2fa', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -568,10 +658,10 @@ userRoutes.delete('/:id/2fa', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/users/:id/lock
- * Lock a user's account (admin/owner only)
+ * POST /api/v1/users/:id/lock
+ * Lock a user's account (admin/owner only, requires MFA)
  */
-userRoutes.post('/:id/lock', async (req, res) => {
+userRoutes.post('/:id/lock', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -589,30 +679,9 @@ userRoutes.post('/:id/lock', async (req, res) => {
   }
 });
 
-/**
- * POST /api/users/:id/unlock
- * Unlock a user's account (admin/owner only)
- */
-userRoutes.post('/:id/unlock', async (req, res) => {
-  try {
-    const { user } = req;
-    const { id } = req.params;
-    const { temporaryHours } = req.body;
-
-    if (!['owner', 'admin'].includes(user.role)) {
-      return res.status(403).json({ error: 'Only administrators can unlock accounts' });
-    }
-
-    const result = await userService.unlockAccount(id, temporaryHours, user);
-    res.json(result);
-  } catch (error) {
-    console.error('Unlock account error:', error);
-    res.status(400).json({ error: error.message });
-  }
-});
 
 /**
- * GET /api/users/:id/security
+ * GET /api/v1/users/:id/security
  * Get user's security status (lock status, MFA, etc)
  */
 userRoutes.get('/:id/security', async (req, res) => {
@@ -642,10 +711,10 @@ userRoutes.get('/:id/security', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/users/:id/mfa-bypass
- * Set MFA bypass for a user (up to 4 hours)
+ * POST /api/v1/users/:id/mfa-bypass
+ * Set MFA bypass for a user (up to 4 hours, requires MFA)
  */
-userRoutes.post('/:id/mfa-bypass', async (req, res) => {
+userRoutes.post('/:id/mfa-bypass', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -672,10 +741,10 @@ userRoutes.post('/:id/mfa-bypass', async (req, res) => {
 });
 
 /**
- * DELETE /api/users/:id/mfa-bypass
- * Clear MFA bypass for a user
+ * DELETE /api/v1/users/:id/mfa-bypass
+ * Clear MFA bypass for a user (requires MFA)
  */
-userRoutes.delete('/:id/mfa-bypass', async (req, res) => {
+userRoutes.delete('/:id/mfa-bypass', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -697,7 +766,7 @@ userRoutes.delete('/:id/mfa-bypass', async (req, res) => {
 // ============================================
 
 /**
- * GET /api/users/:id/dashboards
+ * GET /api/v1/users/:id/dashboards
  * Get dashboards owned by a user
  */
 userRoutes.get('/:id/dashboards', async (req, res) => {
@@ -718,10 +787,10 @@ userRoutes.get('/:id/dashboards', async (req, res) => {
 });
 
 /**
- * POST /api/users/:id/transfer-dashboards
- * Transfer all dashboards from one user to another
+ * POST /api/v1/users/:id/transfer-dashboards
+ * Transfer all dashboards from one user to another (requires MFA)
  */
-userRoutes.post('/:id/transfer-dashboards', async (req, res) => {
+userRoutes.post('/:id/transfer-dashboards', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;
@@ -748,10 +817,10 @@ userRoutes.post('/:id/transfer-dashboards', async (req, res) => {
 });
 
 /**
- * PUT /api/users/:id/admin-update
- * Admin update user details (email, username, display_name)
+ * PUT /api/v1/users/:id/admin-update
+ * Admin update user details (email, username, display_name, requires MFA)
  */
-userRoutes.put('/:id/admin-update', async (req, res) => {
+userRoutes.put('/:id/admin-update', requireMfaForAdminAction, async (req, res) => {
   try {
     const { user } = req;
     const { id } = req.params;

@@ -48,6 +48,7 @@ const DashboardView = () => {
     undo = () => {}, redo = () => {},
     canUndo = () => false, canRedo = () => false,
     clearHistory = () => {},
+    activeWorkspace,
   } = useAppStore();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -298,6 +299,7 @@ const DashboardView = () => {
               setExitEditConfirm={setExitEditConfirm}
               setBackConfirm={setBackConfirm}
               navigate={navigate}
+              activeWorkspace={activeWorkspace}
               showFilterPanel={showFilterPanel}
               onToggleFilterPanel={() => {
                 setShowFilterPanel(prev => {
@@ -335,7 +337,7 @@ const DashboardView = () => {
                   ) : currentWidgets.length > 0 ? (
                     <div
                       ref={gridContainerRef}
-                      className={`grid-stack widgets-grid ${isEditMode ? 'show-grid-lines' : ''}`}
+                      className={`grid-stack widgets-grid ${isEditMode ? 'show-grid-lines' : 'pres-mode'}`}
                       style={{ minHeight: layoutMode === 'fixed' ? fixedCanvasSize.height : undefined }}
                     >
                       {currentWidgets.map((widget, index) => {
@@ -420,7 +422,7 @@ const DashboardView = () => {
           <ErrorState
             error={dashboardLoadError}
             onGoToSettings={() => { clearDashboardLoadError(); navigate('/settings'); }}
-            onBackToDashboards={() => { clearDashboardLoadError(); navigate('/dashboards'); }}
+            onBackToDashboards={() => { clearDashboardLoadError(); navigate(`/workspaces/${activeWorkspace?.id}/dashboards`); }}
           />
         ) : (
           <SelectDashboardState />

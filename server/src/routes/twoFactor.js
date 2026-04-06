@@ -7,9 +7,9 @@
 import { Router } from 'express';
 import twoFactorService from '../services/twoFactorService.js';
 import { getServerInstanceId } from './auth.js';
+import configStore from '../config/configStore.js';
 
-// Use same fallback as auth.js for consistency
-const JWT_SECRET = process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production';
+function getJwtSecret() { return configStore.get('JWT_SECRET') || process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production'; }
 
 export const twoFactorRoutes = Router();
 
@@ -18,7 +18,7 @@ export const twoFactorRoutes = Router();
 // ============================================
 
 /**
- * GET /api/2fa/status
+ * GET /api/v1/2fa/status
  * Get current user's 2FA status
  */
 twoFactorRoutes.get('/status', async (req, res) => {
@@ -40,7 +40,7 @@ twoFactorRoutes.get('/status', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/2fa/totp/setup
+ * POST /api/v1/2fa/totp/setup
  * Generate TOTP secret and QR code for setup
  */
 twoFactorRoutes.post('/totp/setup', async (req, res) => {
@@ -66,7 +66,7 @@ twoFactorRoutes.post('/totp/setup', async (req, res) => {
 });
 
 /**
- * POST /api/2fa/totp/verify
+ * POST /api/v1/2fa/totp/verify
  * Verify TOTP code and enable TOTP
  */
 twoFactorRoutes.post('/totp/verify', async (req, res) => {
@@ -95,7 +95,7 @@ twoFactorRoutes.post('/totp/verify', async (req, res) => {
 });
 
 /**
- * DELETE /api/2fa/totp
+ * DELETE /api/v1/2fa/totp
  * Disable TOTP
  */
 twoFactorRoutes.delete('/totp', async (req, res) => {
@@ -137,7 +137,7 @@ twoFactorRoutes.delete('/totp', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/2fa/passkey/register-options
+ * POST /api/v1/2fa/passkey/register-options
  * Get WebAuthn registration options
  */
 twoFactorRoutes.post('/passkey/register-options', async (req, res) => {
@@ -160,7 +160,7 @@ twoFactorRoutes.post('/passkey/register-options', async (req, res) => {
 });
 
 /**
- * POST /api/2fa/passkey/register-verify
+ * POST /api/v1/2fa/passkey/register-verify
  * Verify and save passkey registration
  */
 twoFactorRoutes.post('/passkey/register-verify', async (req, res) => {
@@ -193,7 +193,7 @@ twoFactorRoutes.post('/passkey/register-verify', async (req, res) => {
 });
 
 /**
- * GET /api/2fa/passkeys
+ * GET /api/v1/2fa/passkeys
  * Get user's registered passkeys
  */
 twoFactorRoutes.get('/passkeys', async (req, res) => {
@@ -211,7 +211,7 @@ twoFactorRoutes.get('/passkeys', async (req, res) => {
 });
 
 /**
- * DELETE /api/2fa/passkey/:id
+ * DELETE /api/v1/2fa/passkey/:id
  * Remove a passkey
  */
 twoFactorRoutes.delete('/passkey/:id', async (req, res) => {
@@ -252,7 +252,7 @@ twoFactorRoutes.delete('/passkey/:id', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/2fa/validate/totp
+ * POST /api/v1/2fa/validate/totp
  * Validate TOTP code during login (requires pending 2FA session)
  */
 twoFactorRoutes.post('/validate/totp', async (req, res) => {
@@ -267,7 +267,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
     const jwt = await import('jsonwebtoken');
     
     try {
-      const decoded = jwt.default.verify(pendingToken, JWT_SECRET);
+      const decoded = jwt.default.verify(pendingToken, getJwtSecret());
       
       if (decoded.userId !== userId || decoded.type !== 'pending_2fa') {
         return res.status(401).json({ error: 'Invalid pending token' });
@@ -282,7 +282,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
     // Get user details and session utilities
     const { query } = await import('../db/db.js');
     const userResult = await query(
-      'SELECT id, username, email, role, display_name, theme_preference FROM users WHERE id = $1',
+      'SELECT id, username, email, role, display_name, theme_preference, auth_provider, totp_enabled, passkey_enabled FROM users WHERE id = $1',
       [userId]
     );
     const user = userResult.rows[0];
@@ -330,7 +330,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
         sessionId,
         instanceId: getServerInstanceId(),
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '8h' }
     );
     
@@ -346,6 +346,9 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
         displayName: user.display_name,
         role: user.role,
         theme_preference: user.theme_preference,
+        auth_provider: user.auth_provider,
+        totp_enabled: user.totp_enabled || false,
+        passkey_enabled: user.passkey_enabled || false,
       },
       method: result.method,
       remainingBackupCodes: result.remainingBackupCodes,
@@ -358,7 +361,7 @@ twoFactorRoutes.post('/validate/totp', async (req, res) => {
 });
 
 /**
- * POST /api/2fa/validate/passkey/options
+ * POST /api/v1/2fa/validate/passkey/options
  * Get passkey authentication options during login
  */
 twoFactorRoutes.post('/validate/passkey/options', async (req, res) => {
@@ -373,7 +376,7 @@ twoFactorRoutes.post('/validate/passkey/options', async (req, res) => {
     const jwt = await import('jsonwebtoken');
     
     try {
-      const decoded = jwt.default.verify(pendingToken, JWT_SECRET);
+      const decoded = jwt.default.verify(pendingToken, getJwtSecret());
       
       if (decoded.userId !== userId || decoded.type !== 'pending_2fa') {
         return res.status(401).json({ error: 'Invalid pending token' });
@@ -391,7 +394,7 @@ twoFactorRoutes.post('/validate/passkey/options', async (req, res) => {
 });
 
 /**
- * POST /api/2fa/validate/passkey/verify
+ * POST /api/v1/2fa/validate/passkey/verify
  * Verify passkey during login
  */
 twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
@@ -406,7 +409,7 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
     const jwt = await import('jsonwebtoken');
     
     try {
-      const decoded = jwt.default.verify(pendingToken, JWT_SECRET);
+      const decoded = jwt.default.verify(pendingToken, getJwtSecret());
       
       if (decoded.userId !== userId || decoded.type !== 'pending_2fa') {
         return res.status(401).json({ error: 'Invalid pending token' });
@@ -421,7 +424,7 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
     // Get user details
     const { query } = await import('../db/db.js');
     const userResult = await query(
-      'SELECT id, username, email, role, display_name, theme_preference FROM users WHERE id = $1',
+      'SELECT id, username, email, role, display_name, theme_preference, auth_provider, totp_enabled, passkey_enabled FROM users WHERE id = $1',
       [userId]
     );
     const user = userResult.rows[0];
@@ -469,7 +472,7 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
         sessionId,
         instanceId: getServerInstanceId(),
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '8h' }
     );
     
@@ -485,6 +488,9 @@ twoFactorRoutes.post('/validate/passkey/verify', async (req, res) => {
         displayName: user.display_name,
         role: user.role,
         theme_preference: user.theme_preference,
+        auth_provider: user.auth_provider,
+        totp_enabled: user.totp_enabled || false,
+        passkey_enabled: user.passkey_enabled || false,
       },
       expiresIn: '8h',
     });

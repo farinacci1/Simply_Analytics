@@ -79,7 +79,7 @@ customColorSchemes: []
 \`\`\`
 
 ## WIDGET TYPES
-Available chart types: bar, stacked-bar, horizontal-bar, diverging-bar, line, multiline, area, pie, donut, radial, treemap, icicle, sankey, funnel, waterfall, scatter, boxplot, heatmap, histogram, radar, gauge, table, pivot, metric, choropleth, hexbin
+Available chart types: bar, horizontal-bar, diverging-bar, line, multiline, area, pie, donut, radial, treemap, icicle, sankey, funnel, waterfall, scatter, boxplot, heatmap, histogram, radar, gauge, table, pivot, metric, choropleth, hexbin
 
 ## FILTER RULES
 - filtersApplied is an array of filter objects on each widget
@@ -129,30 +129,59 @@ Available chart types: bar, stacked-bar, horizontal-bar, diverging-bar, line, mu
 - Widget IDs: use format "w-<timestamp>-<random>" e.g. "w-1711234567890-a1b2"
 - Tab IDs: use format "tab-<number>" e.g. "tab-1"
 
-## CHART TYPE SELECTION GUIDELINES
-- bar/stacked-bar: comparing categories, time series with few points
-- horizontal-bar: long category names, ranking comparisons
-- diverging-bar: positive/negative comparison
-- line/multiline: time series trends, continuous data
-- area: volume over time, stacked compositions
-- pie/donut: part-of-whole (< 7 categories)
-- radial: part-of-whole with radial layout
-- treemap: hierarchical data, space-efficient part-of-whole
-- icicle: hierarchical data, partition layout
-- sankey: flow between categories (2+ dimensions, 1 measure)
-- funnel: conversion/pipeline stages
-- waterfall: cumulative effect of sequential values (1 dimension on columns, 1 measure on rows)
-- scatter: relationship between two numeric values (dimension on columns, measures on rows; supports color mark for grouping)
-- boxplot: distribution of values across categories (dimension on columns, measures on rows)
-- metric: single KPI number (1 measure, 0-1 dimensions)
-- table: flat data table, all fields displayed as columns
-- pivot: matrix/cross-tab view (dimensions on columns become headers, dimensions on rows become row labels, measures fill cells at intersections)
-- choropleth: geographic heatmap (1 geo dimension on columns like country/state, 1 measure on rows; requires config.geoConfig.geoLayer: "world" or "us-states")
-- hexbin: geographic density map (latitude on columns[0], longitude on columns[1], optional measure on rows; aggregates points into hex bins)
-- heatmap: color-coded matrix grid (1 dimension on columns = X, 1 dimension on rows = Y, 1 measure on values = cell color intensity)
-- histogram: distribution of a single continuous numeric field (1 measure on rows; bins auto-computed)
-- radar: multi-axis spider chart (1 dimension on columns = spoke labels (3+ values), optional 2nd dim on columns = series, 1 measure on rows)
-- gauge: single KPI with arc visualization (1 measure on rows; optional config.gaugeConfig.minValue/maxValue/thresholds)
+## CHART TYPE SELECTION — MANDATORY RULES
+
+Think carefully about the user's question and the data shape before choosing a chart type.
+The goal is a chart that communicates the insight clearly. Follow these rules strictly:
+
+### Decision tree (follow in order):
+1. User asks for a single number/KPI (e.g. "total revenue", "how many orders") → metric
+2. User asks "show trend/over time" AND dimension is DATE/TIMESTAMP → line (or area for volume)
+3. Dimension is geographic (country, nation, state, region, territory, province, continent) AND user wants a measure "by" that geography → choropleth (this is STRONGLY preferred over bar for geographic data)
+4. User asks "compare" categories AND expected categories ≤ 6 → bar (vertical)
+5. User asks "compare" categories AND expected categories > 6 → horizontal-bar (labels fit better)
+6. User asks "breakdown/composition/share/proportion" AND expected categories ≤ 6 → donut
+7. User asks "breakdown" AND expected categories > 6 → treemap (or bar with color mark for stacking)
+8. User asks "rank/top/bottom N" → horizontal-bar with sortsApplied DESC, add LIMIT via filter or sort
+9. User asks about relationship between two numeric fields → scatter
+10. User asks about flow/movement between categories → sankey (needs 2 dims + 1 measure)
+11. User asks for a funnel/pipeline/stages → funnel
+12. User asks for distribution → histogram (1 numeric) or boxplot (numeric across categories)
+13. User asks for a table/list of data → table
+14. User asks for a dashboard overview → pick a MIX of chart types (see dashboard rules below)
+
+### HARD CONSTRAINTS — violating these produces bad visuals:
+- NEVER use pie/donut with more than 6 categories — use horizontal-bar or treemap instead
+- NEVER use bar chart when labels will be very long (>15 chars) — use horizontal-bar
+- NEVER use line chart for non-temporal/non-sequential dimensions — use bar
+- NEVER use radar with fewer than 3 or more than 10 spokes
+- NEVER use gauge for anything other than a single value against a known max
+- NEVER use scatter with only 1 numeric column — it needs at least 2 measures
+- NEVER use heatmap with only 1 dimension — it needs 2 dimensions and 1 measure
+- NEVER use sankey with only 1 dimension — it needs at least 2 dimensions and 1 measure
+- ALWAYS prefer horizontal-bar over bar when there are >10 categories
+- ALWAYS add sortsApplied (DESC by the measure) when user asks for "top N" or ranking
+- ALWAYS use appropriate aggregation (SUM for amounts, AVG for rates/averages, COUNT for counts)
+
+### Dashboard composition rules:
+When generating a multi-widget dashboard:
+- Start with 1-2 metric widgets for key KPIs (e.g. total revenue, total orders)
+- Include 1 trend chart (line/area) if a date dimension exists
+- Include 1 choropleth if a geographic dimension exists (country, region, state, etc.)
+- Include 1-2 comparison charts (bar/horizontal-bar) for category breakdowns
+- Include at most 1 pie/donut for a simple composition view (≤6 categories)
+- Include 1 table as a detail/drill-down view if it adds value
+- NEVER duplicate the same dimension+measure combination across widgets
+- Each widget must answer a DIFFERENT analytical question
+- Vary chart types — do NOT use all bars or all pies
+- Limit to 4-6 widgets total for a focused dashboard, 6-8 for comprehensive
+
+### When in doubt:
+- choropleth is the best choice when dimension is a geographic entity (country, state, region)
+- bar is the safest default for category comparison
+- line is the safest default for time series
+- horizontal-bar is the safest for ranked lists
+- metric is the safest for a single KPI
 
 ## RESPONSE FORMAT
 Respond with ONLY valid YAML. No markdown code fences, no explanations, no extra text.
@@ -212,7 +241,7 @@ chartQuery: {}
 \`\`\`
 
 ## WIDGET TYPES
-Available: bar, stacked-bar, horizontal-bar, diverging-bar, line, multiline, area, pie, donut, radial, treemap, icicle, sankey, funnel, waterfall, scatter, boxplot, table, pivot, metric
+Available: bar, horizontal-bar, diverging-bar, line, multiline, area, pie, donut, radial, treemap, icicle, sankey, funnel, waterfall, scatter, boxplot, table, pivot, metric
 
 ## FILTER RULES
 - filtersApplied is an array of filter objects on each widget
@@ -243,27 +272,43 @@ Available: bar, stacked-bar, horizontal-bar, diverging-bar, line, multiline, are
 - Set semanticType: "measure" for numeric, "dimension" for categorical
 - Standard SQL functions are supported: YEAR(), MONTH(), CASE WHEN, CONCAT(), ROUND(), etc.
 
-## CHART SELECTION
-- metric: single KPI (1 measure, optional dimension)
-- bar/stacked-bar/horizontal-bar/diverging-bar: category vs measure comparisons
-- line/multiline: time series trends, continuous data
-- area: volume trends over time
-- pie/donut: part-of-whole (< 7 slices)
-- radial: part-of-whole with radial layout
-- treemap/icicle: hierarchical data
-- sankey: flow between categories (2+ dimensions, 1 measure)
-- funnel: conversion/pipeline stages
-- waterfall: cumulative effect of sequential values
-- scatter: relationship between two numeric values (supports color mark)
-- boxplot: distribution across categories
-- table: flat data table with all fields as columns
-- pivot: matrix/cross-tab (column dimensions become headers, row dimensions become row labels)
-- choropleth: geographic heatmap (geo dimension on columns, measure on rows; set config.geoConfig.geoLayer)
-- hexbin: geographic density (latitude + longitude on columns, optional measure on rows)
-- heatmap: color matrix (1 dimension on columns, 1 on rows, 1 measure on values = cell color)
-- histogram: distribution of a continuous numeric field (1 measure on rows, bins auto-computed)
-- radar: spider chart (1 dimension on columns = spoke labels, optional 2nd column = series, 1 measure on rows)
-- gauge: single KPI arc (1 measure on rows; optional gaugeConfig.minValue/maxValue)
+## CHART TYPE SELECTION — MANDATORY RULES
+
+Think carefully about the question and data shape. The goal is a chart that communicates the insight clearly.
+
+### Decision tree (follow in order):
+1. Single number/KPI (e.g. "total revenue") → metric
+2. "Trend/over time" AND dimension is DATE/TIMESTAMP → line (or area for volume)
+3. Dimension is geographic (country, nation, state, region, territory, province, continent) AND measure "by" that geography → choropleth (strongly preferred over bar for geographic data)
+4. "Compare" categories, ≤ 6 expected → bar
+5. "Compare" categories, > 6 expected → horizontal-bar
+6. "Breakdown/share/proportion", ≤ 6 categories → donut
+7. "Breakdown", > 6 categories → treemap (or bar with color mark for stacking)
+8. "Rank/top/bottom N" → horizontal-bar with sortsApplied DESC
+9. Relationship between two numeric fields → scatter
+10. Flow between categories → sankey (2 dims + 1 measure)
+11. Pipeline/stages → funnel
+12. Distribution → histogram (1 numeric) or boxplot (numeric across categories)
+13. Data listing → table
+
+### HARD CONSTRAINTS:
+- NEVER pie/donut with > 6 categories — use horizontal-bar or treemap
+- NEVER bar with labels > 15 chars — use horizontal-bar
+- NEVER line for non-temporal dimensions — use bar
+- NEVER radar with < 3 or > 10 spokes
+- NEVER scatter with < 2 numeric columns
+- NEVER heatmap with < 2 dimensions
+- NEVER sankey with < 2 dimensions
+- ALWAYS prefer horizontal-bar over bar for > 10 categories
+- ALWAYS add sortsApplied DESC for "top N" or ranking queries
+- ALWAYS use correct aggregation (SUM for amounts, AVG for rates, COUNT for counts)
+
+### When in doubt:
+- choropleth = best for geographic dimensions (country, state, region, nation)
+- bar = safest for category comparison
+- line = safest for time series
+- horizontal-bar = safest for rankings
+- metric = safest for single KPI
 
 ## ID FORMAT
 Use "w-<timestamp>-<random>" e.g. "w-1711234567890-x3y4"
@@ -309,6 +354,14 @@ function buildSemanticViewContext(metadata) {
     }
   }
 
+  lines.push('\n## CHOOSING THE RIGHT CHART TYPE');
+  lines.push('Analyze what each field actually represents based on its name, data type, and sampled values:');
+  lines.push('- If a dimension represents a geographic entity (countries, states, regions, cities, etc.) → use choropleth');
+  lines.push('- If a dimension represents time (dates, months, years, quarters, etc.) → use line or area');
+  lines.push('- If a dimension is categorical with few values → bar, donut, or pie');
+  lines.push('- If a dimension is categorical with many values → horizontal-bar, treemap, or table');
+  lines.push('- Always let the nature of the data drive the chart type, not just the user\'s wording.');
+
   return lines.join('\n');
 }
 
@@ -316,7 +369,7 @@ function escapeForSnowflake(str) {
   return str.replace(/'/g, "''");
 }
 
-export async function generateDashboard(connection, { prompt, semanticViewMetadata, model = 'claude-3-5-sonnet', maxTokens = 4096 }) {
+export async function generateDashboard(connection, { prompt, semanticViewMetadata, model = 'claude-sonnet-4-6', maxTokens = 4096 }) {
   const viewContext = Array.isArray(semanticViewMetadata)
     ? semanticViewMetadata.map(buildSemanticViewContext).join('\n\n')
     : buildSemanticViewContext(semanticViewMetadata);
@@ -349,16 +402,12 @@ export async function generateDashboard(connection, { prompt, semanticViewMetada
     response = JSON.stringify(response);
   }
 
-  const cleaned = response
-    .replace(/^```ya?ml\s*/i, '')
-    .replace(/```\s*$/, '')
-    .trim();
-
+  const cleaned = stripCodeFences(response);
   const parsed = yaml.load(cleaned);
   return validateAndNormalizeDashboard(parsed);
 }
 
-export async function generateWidget(connection, { prompt, semanticViewMetadata, existingWidgets, position, model = 'claude-3-5-sonnet', maxTokens = 2048 }) {
+export async function generateWidget(connection, { prompt, semanticViewMetadata, existingWidgets, position, model = 'claude-sonnet-4-6', maxTokens = 2048 }) {
   const viewContext = buildSemanticViewContext(semanticViewMetadata);
 
   let positionHint = '';
@@ -397,16 +446,12 @@ export async function generateWidget(connection, { prompt, semanticViewMetadata,
     response = JSON.stringify(response);
   }
 
-  const cleaned = response
-    .replace(/^```ya?ml\s*/i, '')
-    .replace(/```\s*$/, '')
-    .trim();
-
+  const cleaned = stripCodeFences(response);
   const parsed = yaml.load(cleaned);
   return validateAndNormalizeWidget(parsed);
 }
 
-export async function modifyDashboard(connection, { prompt, currentYaml, semanticViewMetadata, model = 'claude-3-5-sonnet', maxTokens = 4096 }) {
+export async function modifyDashboard(connection, { prompt, currentYaml, semanticViewMetadata, model = 'claude-sonnet-4-6', maxTokens = 4096 }) {
   const viewContext = Array.isArray(semanticViewMetadata)
     ? semanticViewMetadata.map(buildSemanticViewContext).join('\n\n')
     : buildSemanticViewContext(semanticViewMetadata);
@@ -453,11 +498,7 @@ Return the COMPLETE modified YAML (not just the changed parts).`;
     response = JSON.stringify(response);
   }
 
-  const cleaned = response
-    .replace(/^```ya?ml\s*/i, '')
-    .replace(/```\s*$/, '')
-    .trim();
-
+  const cleaned = stripCodeFences(response);
   const parsed = yaml.load(cleaned);
   return validateAndNormalizeDashboard(parsed);
 }
@@ -531,7 +572,7 @@ function validateAndNormalizeWidget(widget) {
   if (!widget.type || !VALID_TYPES.includes(widget.type)) {
     widget.type = 'bar';
   }
-  if (!widget.fields) widget.fields = [];
+  if (!Array.isArray(widget.fields)) widget.fields = [];
   if (!widget.position) {
     widget.position = { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 };
   } else {
@@ -548,9 +589,9 @@ function validateAndNormalizeWidget(widget) {
       fieldAggregations: {},
     };
   }
-  if (!widget.filtersApplied) widget.filtersApplied = [];
-  if (!widget.sortsApplied) widget.sortsApplied = [];
-  if (!widget.customColumns) widget.customColumns = [];
+  if (!Array.isArray(widget.filtersApplied)) widget.filtersApplied = [];
+  if (!Array.isArray(widget.sortsApplied)) widget.sortsApplied = [];
+  if (!Array.isArray(widget.customColumns)) widget.customColumns = [];
   if (!widget.marks) widget.marks = {};
   if (!widget.chartQuery) widget.chartQuery = {};
   // Derive semanticViewsReferenced from the semanticView FQN when missing.
@@ -658,7 +699,9 @@ You MUST respond with valid JSON. There are TWO response types:
 
 RULES:
 - You can make at most 4 tool calls per conversation turn. After that, give your best answer.
-- Start with sample_data or check_cardinality when building new charts to understand the data.
+- MANDATORY: When building new charts, ALWAYS call sample_data first to inspect the actual data values and types before choosing a chart type. Do not guess the chart type from the field name alone.
+- After sampling, if you see geographic values (country names, state names, regions), use choropleth. If you see dates/timestamps, use line/area. If you see high cardinality text, use horizontal-bar or table. Let the DATA drive the chart type, not assumptions.
+- Use check_cardinality to verify whether a dimension has few enough distinct values for pie/donut (≤6) vs bar (≤15) vs table/treemap (>15).
 - If a tool call fails, proceed with your best guess rather than retrying.
 - For simple questions or modifications to existing widgets, skip tools and answer directly.
 - When adding multiple widgets, use "add_widget" with an array of widget objects.
@@ -703,10 +746,10 @@ async function executeAgentTool(connection, toolName, args) {
         return {
           field,
           distinctCount: count,
-          recommendation: count <= 6 ? 'Good for pie/donut charts'
-            : count <= 15 ? 'Good for bar charts, color encoding'
-            : count <= 50 ? 'Consider filtering or using table/treemap'
-            : 'High cardinality — use table, filter, or aggregate',
+          recommendation: count <= 6 ? 'Low cardinality — good for pie/donut'
+            : count <= 15 ? 'Medium cardinality — good for bar charts, color encoding'
+            : count <= 50 ? 'High cardinality — consider horizontal-bar, treemap, or filtering'
+            : 'Very high cardinality — use table, filter, or aggregate',
           executionTime: Date.now() - startTime,
         };
       }
@@ -799,10 +842,14 @@ async function callCortex(connection, llmMessages, model, maxTokens) {
     response = JSON.stringify(response);
   }
 
-  return response
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```\s*$/, '')
+  return stripCodeFences(response);
+}
+
+function stripCodeFences(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/^\s*```(?:ya?ml|json|sql|text)?\s*\n?/i, '')
+    .replace(/\n?\s*```\s*$/i, '')
     .trim();
 }
 
@@ -811,7 +858,7 @@ export async function chatWithDashboard(connection, {
   currentYaml,
   focusedWidgetId,
   semanticViewMetadata,
-  model = 'claude-3-5-sonnet',
+  model = 'claude-sonnet-4-6',
   maxTokens = 4096,
 }) {
   const viewContext = Array.isArray(semanticViewMetadata)
@@ -852,12 +899,12 @@ export async function chatWithDashboard(connection, {
     try {
       parsed = JSON.parse(rawResponse);
     } catch {
-      return {
-        message: rawResponse,
-        action: 'none',
-        yaml: null,
-        toolSteps,
-      };
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { parsed = JSON.parse(jsonMatch[0]); } catch { return { message: rawResponse, action: 'none', yaml: null, toolSteps }; }
+      } else {
+        return { message: rawResponse, action: 'none', yaml: null, toolSteps };
+      }
     }
 
     if (parsed.type === 'tool_call' && parsed.tool) {
@@ -882,7 +929,7 @@ export async function chatWithDashboard(connection, {
       });
       llmMessages.push({
         role: 'user',
-        content: `Tool result for ${parsed.tool}:\n${truncatedResult}\n\nContinue. You have ${MAX_AGENT_ITERATIONS - iteration} tool calls remaining. Respond with another tool_call or your final answer.`,
+        content: `Tool result for ${parsed.tool}:\n${truncatedResult}\n\nContinue. You have ${MAX_AGENT_ITERATIONS - iteration} tool calls remaining. Respond with ONLY valid JSON — no text before or after the JSON object.`,
       });
 
       continue;
@@ -918,9 +965,421 @@ export async function chatWithDashboard(connection, {
   };
 }
 
+export async function conversationalAnswer(connection, {
+  messages,
+  semanticViewMetadata,
+  model = 'claude-sonnet-4-6',
+  maxTokens = 4096,
+}) {
+  const viewContext = Array.isArray(semanticViewMetadata)
+    ? semanticViewMetadata.map(buildSemanticViewContext).join('\n\n')
+    : buildSemanticViewContext(semanticViewMetadata);
+
+  const toolDescriptions = AGENT_TOOLS.map(t => {
+    const params = Object.entries(t.parameters)
+      .map(([k, v]) => `    ${k}: ${v}`)
+      .join('\n');
+    return `- ${t.name}: ${t.description}\n  Parameters:\n${params}`;
+  }).join('\n\n');
+
+  const systemContent = `You are SimplyAsk, a friendly and knowledgeable data analytics assistant.
+You answer questions about the user's data conversationally. You are NOT a dashboard editor.
+
+${viewContext}
+
+## TOOLS
+You can query the data to answer questions accurately. Use tools when the user asks a factual question about their data.
+For greetings, general conversation, or questions you can answer without data, respond directly — do NOT use tools.
+
+Available tools:
+${toolDescriptions}
+
+## RESPONSE FORMAT
+You MUST respond with valid JSON. There are TWO response types:
+
+### Type 1: Tool call (to query data before answering)
+{
+  "type": "tool_call",
+  "tool": "<tool_name>",
+  "args": { <tool parameters> },
+  "thinking": "Brief explanation of why you're calling this tool"
+}
+
+### Type 2: Final answer
+{
+  "type": "answer",
+  "message": "Your conversational response in markdown. Be helpful, clear, and concise."
+}
+
+RULES:
+- For greetings like "hi", "hello", "hey" — respond warmly WITHOUT using tools.
+- For general chat or help requests — respond directly WITHOUT using tools.
+- For data questions — use tools to query data first, then give a complete textual answer with the results.
+- When presenting data results, format them nicely using markdown tables or bullet points.
+- You can make at most ${MAX_AGENT_ITERATIONS} tool calls per turn.
+- Always end with a Type 2 "answer" response after gathering data.
+- Be conversational and natural. You are chatting with the user, not generating dashboards.`;
+
+  const llmMessages = [
+    { role: 'system', content: systemContent },
+    ...messages.map(m => ({ role: m.role, content: m.content })),
+  ];
+
+  const toolSteps = [];
+  let iteration = 0;
+
+  while (iteration < MAX_AGENT_ITERATIONS) {
+    iteration++;
+
+    const rawResponse = await callCortex(connection, llmMessages, model, maxTokens);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawResponse);
+    } catch {
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { parsed = JSON.parse(jsonMatch[0]); } catch { return { message: rawResponse, toolSteps }; }
+      } else {
+        return { message: rawResponse, toolSteps };
+      }
+    }
+
+    if (parsed.type === 'tool_call' && parsed.tool) {
+      const toolStep = {
+        tool: parsed.tool,
+        args: parsed.args || {},
+        thinking: parsed.thinking || '',
+      };
+
+      const toolResult = await executeAgentTool(connection, parsed.tool, parsed.args || {});
+      toolStep.result = toolResult;
+      toolSteps.push(toolStep);
+
+      const resultStr = JSON.stringify(toolResult, null, 2);
+      const truncatedResult = resultStr.length > 3000
+        ? resultStr.substring(0, 3000) + '\n... (truncated)'
+        : resultStr;
+
+      llmMessages.push({
+        role: 'assistant',
+        content: JSON.stringify({ type: 'tool_call', tool: parsed.tool, args: parsed.args, thinking: parsed.thinking }),
+      });
+      llmMessages.push({
+        role: 'user',
+        content: `Tool result for ${parsed.tool}:\n${truncatedResult}\n\nNow respond with a Type 2 "answer" JSON containing your conversational response to the user. You have ${MAX_AGENT_ITERATIONS - iteration} tool calls remaining.`,
+      });
+
+      continue;
+    }
+
+    return {
+      message: parsed.message || rawResponse,
+      toolSteps,
+    };
+  }
+
+  return {
+    message: 'I ran out of tool calls. Please try rephrasing your request.',
+    toolSteps,
+  };
+}
+
+/**
+ * Unified AskAI chat — combines data-querying tools with widget creation/modification.
+ * Replaces the old 3-way intent classification + separate handler pattern.
+ */
+export async function askChat(connection, {
+  messages,
+  semanticViewMetadata,
+  priorArtifacts = [],
+  model = 'claude-sonnet-4-6',
+  maxTokens = 4096,
+  onToolStep,
+}) {
+  const viewContext = Array.isArray(semanticViewMetadata)
+    ? semanticViewMetadata.map(buildSemanticViewContext).join('\n\n')
+    : buildSemanticViewContext(semanticViewMetadata);
+
+  const toolDescriptions = AGENT_TOOLS.map(t => {
+    const params = Object.entries(t.parameters)
+      .map(([k, v]) => `    ${k}: ${v}`)
+      .join('\n');
+    return `- ${t.name}: ${t.description}\n  Parameters:\n${params}`;
+  }).join('\n\n');
+
+  let artifactContext = '';
+  if (priorArtifacts.length > 0) {
+    const widgetSummaries = priorArtifacts
+      .filter(a => a.type === 'widget' && a.widget)
+      .map(a => {
+        const w = a.widget;
+        const fieldsSummary = (w.fields || []).map(f =>
+          `${f.name} (${f.shelf}, ${f.semanticType}${f.markType ? ', mark:' + f.markType : ''}${f.aggregation ? ', agg:' + f.aggregation : ''})`
+        ).join(', ');
+        return `- Widget "${w.title}" (id: ${w.id}, type: ${w.type})\n  semanticView: ${w.semanticView || w.semanticViewsReferenced?.[0]?.fullyQualifiedName || 'unknown'}\n  fields: [${fieldsSummary}]\n  filters: ${JSON.stringify(w.filtersApplied || [])}\n  sorts: ${JSON.stringify(w.sortsApplied || [])}`;
+      }).join('\n');
+    if (widgetSummaries) {
+      artifactContext = `\n\n## EXISTING WIDGETS IN THIS CONVERSATION\nThe user has these widgets from prior messages. When they ask to modify a chart, update the relevant widget rather than creating a new one.\n${widgetSummaries}`;
+    }
+  }
+
+  const systemContent = `You are AskAI, a friendly and knowledgeable data analytics assistant for the Simply Analytics platform.
+You help users explore their data, answer questions, and build or modify visualizations through natural conversation.
+
+${viewContext}
+
+## TOOLS
+You can query the data to answer questions accurately or to inspect data before building charts.
+For greetings, general conversation, or questions you can answer without data, respond directly — do NOT use tools.
+When building new charts, ALWAYS call sample_data first to understand the data before choosing a chart type.
+
+Available tools:
+${toolDescriptions}
+
+## WIDGET SCHEMA
+When creating or modifying widgets, use this field structure:
+
+\`\`\`yaml
+id: "<unique-id>"
+title: "Widget Title"
+type: "<chart_type>"
+semanticView: "DATABASE.SCHEMA.VIEW_NAME"
+semanticViewsReferenced:
+  - name: "VIEW_NAME"
+    fullyQualifiedName: "DATABASE.SCHEMA.VIEW_NAME"
+fields:
+  - name: "FIELD_NAME"
+    shelf: "columns"
+    dataType: "VARCHAR"
+    semanticType: "dimension"
+    aggregation: null
+    markType: null
+    alias: null
+    isCustomColumn: false
+filtersApplied: []
+sortsApplied: []
+customColumns: []
+marks: {}
+config:
+  showTitle: true
+  titlePosition: "top-left"
+  colorScheme: "tableau10"
+\`\`\`
+
+Widget types: bar, horizontal-bar, diverging-bar, line, multiline, area, pie, donut, treemap, funnel, waterfall, scatter, boxplot, heatmap, histogram, radar, sankey, icicle, table, pivot, metric, choropleth, hexbin, gauge, radial
+Note: For stacked bars, use type "bar" with a color mark field — stacking is handled automatically by the bar chart renderer.
+
+Chart selection rules:
+- Single KPI → metric
+- Time series → line or area
+- Geographic data → choropleth
+- Category comparison ≤6 → bar, >6 → horizontal-bar
+- Share/proportion ≤6 categories → donut, >6 → treemap
+- Rankings → horizontal-bar with DESC sort
+- Two numeric fields → scatter
+- Data listing → table
+
+Field rules:
+- Dimensions: shelf "columns", semanticType "dimension", aggregation null
+- Measures: shelf "rows", semanticType "measure", aggregation "SUM"/"AVG"/"COUNT"/"MIN"/"MAX"
+- Color marks: markType "color" (can be on any shelf)
+
+## CALCULATED FIELDS (customColumns)
+When the user's request needs a derived value not available as a native field in the semantic view, create a calculated field.
+- Add entries to the "customColumns" array: [{ name: "FIELD_NAME", expression: "SQL expression" }]
+- Reference existing semantic view fields with bracket syntax: [EXISTING_FIELD]
+- After creating a calculated field, reference it in the "fields" array with isCustomColumn: true
+- Set semanticType: "measure" for numeric calculations, "dimension" for categorical/temporal derivations
+- Standard SQL functions are supported: YEAR(), MONTH(), DAY(), QUARTER(), DATE_TRUNC(), CASE WHEN, CONCAT(), ROUND(), ABS(), COALESCE(), etc.
+
+Examples:
+- Extract year from date: { name: "ORDER_YEAR", expression: "YEAR([ORDER_DATE])" }
+- Extract month: { name: "ORDER_MONTH", expression: "MONTH([ORDER_DATE])" }
+- Profit margin: { name: "MARGIN", expression: "([REVENUE] - [COST]) / [REVENUE] * 100" }
+- Category grouping: { name: "SIZE_GROUP", expression: "CASE WHEN [QUANTITY] > 100 THEN 'Large' ELSE 'Small' END" }
+
+IMPORTANT: When the user asks for data "by year", "by month", "quarterly", etc. and the semantic view only has a DATE/TIMESTAMP field, you MUST create a customColumn to extract the time part and use it as a dimension.
+
+## FILTER RULES
+- filtersApplied is an array of filter objects: { field, operator, value } or { field, operator: "IN", values: [...] }
+- Supported operators: "IN", "NOT IN", "=", "!=", ">", "<", ">=", "<=", "LIKE", "BETWEEN"
+- BETWEEN uses "value" as low and "value2" as high
+
+## SORT RULES
+- sortsApplied is an array: [{ field: "FIELD_NAME", direction: "ASC" | "DESC" }]
+- Always add DESC sort for "top N" or ranking queries
+${artifactContext}
+
+## RESPONSE FORMAT
+You MUST respond with valid JSON. There are TWO response types:
+
+### Type 1: Tool call (to query data before answering)
+{
+  "type": "tool_call",
+  "tool": "<tool_name>",
+  "args": { <tool parameters> },
+  "thinking": "Brief explanation of why you're calling this tool"
+}
+
+### Type 2: Final answer
+{
+  "type": "answer",
+  "message": "Your conversational response in markdown. Be helpful, clear, and concise.",
+  "action": "none" | "add_widget" | "update_widget" | "add_dashboard",
+  "yaml": <see action descriptions below>
+}
+
+Actions:
+- "none": conversational answer only, yaml is null
+- "add_widget": yaml is a single widget object OR an array of widget objects
+- "update_widget": yaml is { widgetId: "<id>", widget: <updated widget> }. Preserve the widget id.
+- "add_dashboard": yaml is { title: "Dashboard Title", tabs: [{ id: "tab-1", label: "Tab Label", widgets: [<widget>, ...] }] }. Use for multi-widget overview/report/KPI requests.
+
+RULES:
+- CRITICAL: Respond with ONLY valid JSON. No text before or after the JSON object. No markdown code fences.
+- For greetings like "hi" — respond warmly with action "none". No tools needed.
+- For data questions — use tools to query data, then answer with text. Use action "none".
+- For single chart / "show me" / "visualize" requests — sample data first, then use action "add_widget".
+- For "dashboard" / "overview" / "report" / "KPIs" / multiple charts — sample data first, then use action "add_dashboard" with multiple widgets organized in tabs.
+- For "change the chart" / "make it a line chart" / modifications — use action "update_widget".
+- When presenting data results as text, use markdown tables or bullet points.
+- You can make at most ${MAX_AGENT_ITERATIONS} tool calls per turn.
+- Be concise. 1-2 sentences for the message field.
+- The "yaml" field contains a JS object, not a YAML string.`;
+
+  const llmMessages = [
+    { role: 'system', content: systemContent },
+    ...messages.map(m => ({ role: m.role, content: m.content })),
+  ];
+
+  const toolSteps = [];
+  let iteration = 0;
+
+  while (iteration < MAX_AGENT_ITERATIONS) {
+    iteration++;
+
+    const rawResponse = await callCortex(connection, llmMessages, model, maxTokens);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawResponse);
+    } catch {
+      // The AI sometimes wraps JSON in conversational text — extract it
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          return { message: rawResponse, action: 'none', yaml: null, toolSteps };
+        }
+      } else {
+        return { message: rawResponse, action: 'none', yaml: null, toolSteps };
+      }
+    }
+
+    if (parsed.type === 'tool_call' && parsed.tool) {
+      const toolStep = {
+        tool: parsed.tool,
+        args: parsed.args || {},
+        thinking: parsed.thinking || '',
+      };
+
+      if (onToolStep) onToolStep(toolStep);
+
+      const toolResult = await executeAgentTool(connection, parsed.tool, parsed.args || {});
+      toolStep.result = toolResult;
+      toolSteps.push(toolStep);
+
+      const resultStr = JSON.stringify(toolResult, null, 2);
+      const truncatedResult = resultStr.length > 3000
+        ? resultStr.substring(0, 3000) + '\n... (truncated)'
+        : resultStr;
+
+      llmMessages.push({
+        role: 'assistant',
+        content: JSON.stringify({ type: 'tool_call', tool: parsed.tool, args: parsed.args, thinking: parsed.thinking }),
+      });
+      llmMessages.push({
+        role: 'user',
+        content: `Tool result for ${parsed.tool}:\n${truncatedResult}\n\nContinue. You have ${MAX_AGENT_ITERATIONS - iteration} tool calls remaining. Respond with ONLY valid JSON — no text before or after the JSON object.`,
+      });
+
+      continue;
+    }
+
+    if (parsed.action === 'add_widget' && parsed.yaml) {
+      if (Array.isArray(parsed.yaml)) {
+        parsed.yaml = parsed.yaml.map(w => validateAndNormalizeWidget(w));
+      } else {
+        parsed.yaml = validateAndNormalizeWidget(parsed.yaml);
+      }
+    } else if (parsed.action === 'update_widget' && parsed.yaml?.widget) {
+      parsed.yaml.widget = validateAndNormalizeWidget(parsed.yaml.widget);
+    } else if (parsed.action === 'add_dashboard' && parsed.yaml) {
+      const dashboard = parsed.yaml;
+      if (dashboard.tabs) {
+        for (const tab of dashboard.tabs) {
+          tab.widgets = (tab.widgets || []).map(w => validateAndNormalizeWidget(w));
+        }
+      } else if (Array.isArray(dashboard.widgets)) {
+        dashboard.tabs = [{ id: 'tab-1', label: 'Overview', widgets: dashboard.widgets.map(w => validateAndNormalizeWidget(w)) }];
+        delete dashboard.widgets;
+      }
+      if (!dashboard.title) dashboard.title = parsed.message || 'AI Dashboard';
+    }
+
+    return {
+      message: parsed.message || 'Done.',
+      action: parsed.action || 'none',
+      yaml: parsed.yaml || null,
+      toolSteps,
+    };
+  }
+
+  return {
+    message: 'I ran out of tool calls. Please try rephrasing your request.',
+    action: 'none',
+    yaml: null,
+    toolSteps,
+  };
+}
+
+export async function classifyIntent(connection, { message, hasHistory, model = 'claude-sonnet-4-6' }) {
+  const systemPrompt = `You are an intent classifier for a data analytics chat assistant. Given the user's message, classify their intent into exactly ONE of these categories:
+
+- "dashboard": User wants a multi-widget dashboard, overview, report, or KPI summary with multiple charts
+- "widget": User wants a specific chart, graph, table, metric, or data visualization
+- "data_answer": User is asking a factual question about their data that can be answered in text (e.g. "what was total revenue last quarter?") — no chart needed
+- "chat": General conversation, greetings, help requests, clarification, or anything not related to data analysis
+
+Respond with ONLY a JSON object: {"intent": "<category>", "reason": "<brief explanation>"}
+Do NOT include any other text.`;
+
+  const userContent = hasHistory
+    ? `[Continuing a conversation] User says: "${message}"`
+    : `[New conversation] User says: "${message}"`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userContent },
+  ];
+
+  const raw = await callCortex(connection, messages, model, 128);
+  try {
+    const parsed = JSON.parse(raw);
+    const valid = ['dashboard', 'widget', 'data_answer', 'chat'];
+    if (valid.includes(parsed.intent)) return parsed.intent;
+  } catch { /* fallback */ }
+  return 'chat';
+}
+
 export default {
   generateDashboard,
   generateWidget,
   modifyDashboard,
   chatWithDashboard,
+  conversationalAnswer,
+  askChat,
+  classifyIntent,
 };

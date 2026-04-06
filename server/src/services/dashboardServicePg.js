@@ -1,23 +1,72 @@
 import crypto from 'crypto';
 import { query, transaction, now } from '../db/db.js';
-import { getGroupsForUser, isUserInGroup } from './groupService.js';
+import { isWorkspaceMember } from './workspaceService.js';
 
-export async function getDashboardsForUser(userId, userAppRole) {
-  const userGroups = await getGroupsForUser(userId);
-  const groupIds = userGroups.map(g => g.id);
-
+export async function getDashboardsForUser(userId, userAppRole, workspaceId = null) {
   const effectiveLevel = ['owner', 'admin', 'editor'].includes(userAppRole) ? 'edit' : 'view';
-
   const isAdminOrOwner = ['owner', 'admin'].includes(userAppRole);
 
   let result;
-  
-  if (isAdminOrOwner) {
+
+  if (workspaceId) {
+    if (isAdminOrOwner) {
+      result = await query(`
+        SELECT DISTINCT
+          d.id, d.name, d.description, d.warehouse, d.role,
+          d.visibility, d.is_published, d.created_at, d.updated_at,
+          d.owner_id, d.folder_id, d.workspace_id, d.connection_id,
+          owner.username as owner_username,
+          c.username as snowflake_username,
+          c.name as connection_name,
+          f.name as folder_name,
+          CASE 
+            WHEN d.owner_id = $1 THEN 'owner'
+            ELSE $3
+          END as access_level
+        FROM dashboards d
+        JOIN users owner ON d.owner_id = owner.id
+        LEFT JOIN snowflake_connections c ON d.connection_id = c.id
+        LEFT JOIN dashboard_folders f ON d.folder_id = f.id
+        WHERE d.workspace_id = $2
+        ORDER BY d.updated_at DESC
+      `, [userId, workspaceId, effectiveLevel]);
+    } else {
+      result = await query(`
+        SELECT DISTINCT
+          d.id, d.name, d.description, d.warehouse, d.role,
+          d.visibility, d.is_published, d.created_at, d.updated_at,
+          d.owner_id, d.folder_id, d.workspace_id, d.connection_id,
+          owner.username as owner_username,
+          c.username as snowflake_username,
+          c.name as connection_name,
+          f.name as folder_name,
+          CASE 
+            WHEN d.owner_id = $1 THEN 'owner'
+            ELSE $3
+          END as access_level
+        FROM dashboards d
+        JOIN users owner ON d.owner_id = owner.id
+        LEFT JOIN snowflake_connections c ON d.connection_id = c.id
+        LEFT JOIN dashboard_folders f ON d.folder_id = f.id
+        LEFT JOIN dashboard_user_access dua ON d.id = dua.dashboard_id AND dua.user_id = $1
+        LEFT JOIN dashboard_group_access dga ON d.id = dga.dashboard_id
+        LEFT JOIN group_members gm ON dga.group_id = gm.group_id AND gm.user_id = $1
+        WHERE d.workspace_id = $2
+          AND (
+            d.owner_id = $1
+            OR dua.user_id = $1
+            OR gm.user_id = $1
+            OR (d.visibility = 'public' AND d.is_published = true)
+          )
+        ORDER BY d.updated_at DESC
+      `, [userId, workspaceId, effectiveLevel]);
+    }
+  } else if (isAdminOrOwner) {
     result = await query(`
       SELECT DISTINCT
         d.id, d.name, d.description, d.warehouse, d.role,
         d.visibility, d.is_published, d.created_at, d.updated_at,
-        d.owner_id, d.folder_id,
+        d.owner_id, d.folder_id, d.workspace_id, d.connection_id,
         owner.username as owner_username,
         c.username as snowflake_username,
         c.name as connection_name,
@@ -30,62 +79,37 @@ export async function getDashboardsForUser(userId, userAppRole) {
       JOIN users owner ON d.owner_id = owner.id
       LEFT JOIN snowflake_connections c ON d.connection_id = c.id
       LEFT JOIN dashboard_folders f ON d.folder_id = f.id
-      ORDER BY d.updated_at DESC
-    `, [userId, effectiveLevel]);
-  } else if (groupIds.length === 0) {
-    result = await query(`
-      SELECT DISTINCT
-        d.id, d.name, d.description, d.warehouse, d.role,
-        d.visibility, d.is_published, d.created_at, d.updated_at,
-        d.owner_id, d.folder_id,
-        owner.username as owner_username,
-        c.username as snowflake_username,
-        c.name as connection_name,
-        f.name as folder_name,
-        CASE 
-          WHEN d.owner_id = $1 THEN 'owner'
-          ELSE $2
-        END as access_level
-      FROM dashboards d
-      JOIN users owner ON d.owner_id = owner.id
-      LEFT JOIN snowflake_connections c ON d.connection_id = c.id
-      LEFT JOIN dashboard_folders f ON d.folder_id = f.id
-      LEFT JOIN dashboard_user_access dua ON d.id = dua.dashboard_id AND dua.user_id = $1
-      WHERE 
-        d.owner_id = $1
-        OR dua.user_id = $1
-        OR (d.visibility = 'public' AND d.is_published = true)
       ORDER BY d.updated_at DESC
     `, [userId, effectiveLevel]);
   } else {
-    const groupPlaceholders = groupIds.map((_, i) => `$${i + 2}`).join(',');
-    const effectiveLevelIdx = groupIds.length + 2;
     result = await query(`
       SELECT DISTINCT
         d.id, d.name, d.description, d.warehouse, d.role,
         d.visibility, d.is_published, d.created_at, d.updated_at,
-        d.owner_id, d.folder_id,
+        d.owner_id, d.folder_id, d.workspace_id, d.connection_id,
         owner.username as owner_username,
         c.username as snowflake_username,
         c.name as connection_name,
         f.name as folder_name,
         CASE 
           WHEN d.owner_id = $1 THEN 'owner'
-          ELSE $${effectiveLevelIdx}
+          ELSE $2
         END as access_level
       FROM dashboards d
       JOIN users owner ON d.owner_id = owner.id
       LEFT JOIN snowflake_connections c ON d.connection_id = c.id
       LEFT JOIN dashboard_folders f ON d.folder_id = f.id
       LEFT JOIN dashboard_user_access dua ON d.id = dua.dashboard_id AND dua.user_id = $1
-      LEFT JOIN dashboard_group_access dga ON d.id = dga.dashboard_id AND dga.group_id IN (${groupPlaceholders})
+      LEFT JOIN dashboard_group_access dga ON d.id = dga.dashboard_id
+      LEFT JOIN group_members gm ON dga.group_id = gm.group_id AND gm.user_id = $1
+      JOIN workspace_members wm ON d.workspace_id = wm.workspace_id AND wm.user_id = $1
       WHERE 
         d.owner_id = $1
         OR dua.user_id = $1
-        OR dga.group_id IN (${groupPlaceholders})
+        OR gm.user_id = $1
         OR (d.visibility = 'public' AND d.is_published = true)
       ORDER BY d.updated_at DESC
-    `, [userId, ...groupIds, effectiveLevel]);
+    `, [userId, effectiveLevel]);
   }
 
   return result.rows;
@@ -97,6 +121,7 @@ export async function getDashboardById(dashboardId) {
       d.id, d.name, d.description, d.warehouse, d.role,
       d.yaml_definition, d.visibility, d.is_published,
       d.created_at, d.updated_at, d.owner_id, d.connection_id, d.folder_id,
+      d.workspace_id,
       owner.username as owner_username,
       c.name as connection_name, c.account as connection_account,
       c.username as snowflake_username,
@@ -121,10 +146,13 @@ export async function checkDashboardAccess(dashboardId, userId, requiredLevel = 
     return { hasAccess: true, accessLevel: 'owner', exists: true };
   }
 
+  // App-level admins/owners have full access to all dashboards
+  if (['owner', 'admin'].includes(userAppRole)) {
+    return { hasAccess: true, accessLevel: 'edit', exists: true };
+  }
+
   const getEffectiveLevel = (appRole) => {
     switch (appRole) {
-      case 'owner':
-      case 'admin':
       case 'editor':
         return 'edit';
       case 'viewer':
@@ -135,6 +163,7 @@ export async function checkDashboardAccess(dashboardId, userId, requiredLevel = 
 
   const effectiveLevel = userAppRole ? getEffectiveLevel(userAppRole) : 'view';
 
+  // Check per-user access
   const userAccess = await query(
     'SELECT access_level FROM dashboard_user_access WHERE dashboard_id = $1 AND user_id = $2',
     [dashboardId, userId]
@@ -144,20 +173,30 @@ export async function checkDashboardAccess(dashboardId, userId, requiredLevel = 
     return { hasAccess: meetsAccessLevel(effectiveLevel, requiredLevel), accessLevel: effectiveLevel, exists: true };
   }
 
-  if (dashboard.visibility === 'private') {
-    const userGroups = await getGroupsForUser(userId);
-    for (const group of userGroups) {
-      const hasGroupAccess = await query(
-        'SELECT id FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2',
-        [dashboardId, group.id]
-      );
-      if (hasGroupAccess.rows.length > 0) {
+  // Check group-based access
+  const groupAccess = await query(
+    `SELECT dga.id FROM dashboard_group_access dga
+     JOIN group_members gm ON dga.group_id = gm.group_id
+     WHERE dga.dashboard_id = $1 AND gm.user_id = $2
+     LIMIT 1`,
+    [dashboardId, userId]
+  );
+
+  if (groupAccess.rows.length > 0) {
+    return { hasAccess: meetsAccessLevel(effectiveLevel, requiredLevel), accessLevel: effectiveLevel, exists: true };
+  }
+
+  // Workspace-scoped: if dashboard is in a workspace and user is a member, grant access
+  if (dashboard.workspace_id) {
+    const isMember = await isWorkspaceMember(dashboard.workspace_id, userId);
+    if (isMember) {
+      if (dashboard.visibility === 'public') {
         return { hasAccess: meetsAccessLevel(effectiveLevel, requiredLevel), accessLevel: effectiveLevel, exists: true };
       }
     }
-    return { hasAccess: false, accessLevel: null, exists: true };
   }
 
+  // Public + published dashboards visible to anyone
   if (dashboard.visibility === 'public') {
     return { hasAccess: meetsAccessLevel(effectiveLevel, requiredLevel), accessLevel: effectiveLevel, exists: true };
   }
@@ -181,36 +220,46 @@ export async function createDashboard(dashboardData, ownerId) {
     isPublished = false,
     yamlDefinition,
     folderId = null,
+    workspaceId = null,
   } = dashboardData;
 
-  if (!name || !connectionId || !warehouse || !role) {
-    throw new Error('Name, connection, warehouse, and role are required');
+  if (!name) {
+    throw new Error('Name is required');
   }
 
-  const connection = await query(
-    'SELECT id FROM snowflake_connections WHERE id = $1 AND user_id = $2',
-    [connectionId, ownerId]
-  );
+  // Resolve connection: use explicit connectionId, or fall back to workspace connection
+  let effectiveConnectionId = connectionId || null;
+  let effectiveWarehouse = warehouse || null;
+  let effectiveRole = role || null;
 
-  if (connection.rows.length === 0) {
-    throw new Error('Invalid connection');
+  if (workspaceId && (!effectiveConnectionId || !effectiveWarehouse || !effectiveRole)) {
+    const wc = await query(
+      'SELECT connection_id, warehouse, role FROM workspace_connections WHERE workspace_id = $1 ORDER BY added_at ASC LIMIT 1',
+      [workspaceId]
+    );
+    if (wc.rows.length > 0) {
+      if (!effectiveConnectionId) effectiveConnectionId = wc.rows[0].connection_id;
+      if (!effectiveWarehouse) effectiveWarehouse = wc.rows[0].warehouse;
+      if (!effectiveRole) effectiveRole = wc.rows[0].role;
+    }
   }
 
   const id = crypto.randomUUID();
 
   await query(`
     INSERT INTO dashboards 
-      (id, name, description, owner_id, connection_id, warehouse, role, 
+      (id, name, description, owner_id, workspace_id, connection_id, warehouse, role, 
        visibility, is_published, yaml_definition, folder_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
   `, [
     id,
     name,
     description || null,
     ownerId,
-    connectionId,
-    warehouse,
-    role,
+    workspaceId,
+    effectiveConnectionId,
+    effectiveWarehouse,
+    effectiveRole,
     visibility,
     isPublished,
     yamlDefinition || null,
@@ -227,7 +276,7 @@ export async function updateDashboard(dashboardId, updates, userId, userAppRole 
   }
 
   const allowedFields = ['name', 'description', 'warehouse', 'role', 
-                          'visibility', 'is_published', 'yaml_definition', 'folder_id'];
+                          'visibility', 'is_published', 'yaml_definition', 'folder_id', 'workspace_id'];
   const setClauses = [];
   const values = [];
   let paramIndex = 1;
@@ -235,6 +284,7 @@ export async function updateDashboard(dashboardId, updates, userId, userAppRole 
   for (const [key, value] of Object.entries(updates)) {
     const dbKey = key === 'yamlDefinition' ? 'yaml_definition' :
                   key === 'isPublished' ? 'is_published' :
+                  key === 'workspaceId' ? 'workspace_id' :
                   key.replace(/([A-Z])/g, '_$1').toLowerCase();
     
     if (allowedFields.includes(dbKey)) {
@@ -257,7 +307,7 @@ export async function updateDashboard(dashboardId, updates, userId, userAppRole 
 
   const result = await query(`
     SELECT id, name, description, warehouse, role, visibility, 
-           is_published, yaml_definition, updated_at
+           is_published, yaml_definition, workspace_id, updated_at
     FROM dashboards WHERE id = $1
   `, [dashboardId]);
 
@@ -357,12 +407,12 @@ export async function transferOwnership(dashboardId, newOwnerId, currentOwnerId)
   }
 
   const newOwner = await query(
-    "SELECT id, role FROM users WHERE id = $1 AND role IN ('owner', 'admin', 'creator')",
+    "SELECT id, role FROM users WHERE id = $1 AND role IN ('owner', 'admin', 'editor')",
     [newOwnerId]
   );
 
   if (newOwner.rows.length === 0) {
-    throw new Error('New owner must have at least creator role');
+    throw new Error('New owner must have at least editor role');
   }
 
   await query(
@@ -382,8 +432,8 @@ export async function updateDashboardConnection(dashboardId, connectionId, userI
   }
 
   const connection = await query(
-    'SELECT id FROM snowflake_connections WHERE id = $1 AND user_id = $2',
-    [connectionId, userId]
+    'SELECT id FROM snowflake_connections WHERE id = $1',
+    [connectionId]
   );
 
   if (connection.rows.length === 0) {
@@ -398,6 +448,7 @@ export async function updateDashboardConnection(dashboardId, connectionId, userI
   return true;
 }
 
+// Legacy group access methods kept for backward compatibility during migration
 export async function getDashboardGroups(dashboardId) {
   const result = await query(`
     SELECT 
@@ -416,83 +467,53 @@ export async function getDashboardGroups(dashboardId) {
 
 export async function grantGroupAccess(dashboardId, groupId, grantedBy) {
   const dashboard = await getDashboardById(dashboardId);
-  if (!dashboard) {
-    throw new Error('Dashboard not found');
-  }
-  
+  if (!dashboard) throw new Error('Dashboard not found');
   const { accessLevel } = await checkDashboardAccess(dashboardId, grantedBy);
   const isOwner = dashboard.owner_id === grantedBy;
-  
   if (!isOwner && accessLevel !== 'admin' && accessLevel !== 'owner') {
     throw new Error('Only owner or admin can grant group access');
   }
-
   const existing = await query(
     'SELECT id FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2',
     [dashboardId, groupId]
   );
-
   if (existing.rows.length > 0) {
-    await query(`
-      UPDATE dashboard_group_access
-      SET granted_by = $1, granted_at = ${now()}
-      WHERE dashboard_id = $2 AND group_id = $3
-    `, [grantedBy, dashboardId, groupId]);
+    await query(`UPDATE dashboard_group_access SET granted_by = $1, granted_at = ${now()} WHERE dashboard_id = $2 AND group_id = $3`,
+      [grantedBy, dashboardId, groupId]);
   } else {
     const id = crypto.randomUUID();
-    await query(`
-      INSERT INTO dashboard_group_access (id, dashboard_id, group_id, granted_by)
-      VALUES ($1, $2, $3, $4)
-    `, [id, dashboardId, groupId, grantedBy]);
+    await query(`INSERT INTO dashboard_group_access (id, dashboard_id, group_id, granted_by) VALUES ($1, $2, $3, $4)`,
+      [id, dashboardId, groupId, grantedBy]);
   }
-
   return true;
 }
 
 export async function revokeGroupAccess(dashboardId, groupId, revokedBy) {
   const dashboard = await getDashboardById(dashboardId);
-  if (!dashboard) {
-    throw new Error('Dashboard not found');
-  }
-  
+  if (!dashboard) throw new Error('Dashboard not found');
   const { accessLevel } = await checkDashboardAccess(dashboardId, revokedBy);
   const isOwner = dashboard.owner_id === revokedBy;
-  
   if (!isOwner && accessLevel !== 'admin' && accessLevel !== 'owner') {
     throw new Error('Only owner or admin can revoke group access');
   }
-
-  await query(
-    'DELETE FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2',
-    [dashboardId, groupId]
-  );
-
+  await query('DELETE FROM dashboard_group_access WHERE dashboard_id = $1 AND group_id = $2', [dashboardId, groupId]);
   return true;
 }
 
 export async function updateDashboardGroupAccess(dashboardId, groupIds, userId) {
   const dashboard = await getDashboardById(dashboardId);
-  if (!dashboard) {
-    throw new Error('Dashboard not found');
-  }
-  
+  if (!dashboard) throw new Error('Dashboard not found');
   const { accessLevel } = await checkDashboardAccess(dashboardId, userId);
   const isOwner = dashboard.owner_id === userId;
-  
   if (!isOwner && accessLevel !== 'admin' && accessLevel !== 'owner') {
     throw new Error('Only owner or admin can update group access');
   }
-
   await query('DELETE FROM dashboard_group_access WHERE dashboard_id = $1', [dashboardId]);
-  
   for (const groupId of groupIds) {
     const id = crypto.randomUUID();
-    await query(`
-      INSERT INTO dashboard_group_access (id, dashboard_id, group_id, granted_by)
-      VALUES ($1, $2, $3, $4)
-    `, [id, dashboardId, groupId, userId]);
+    await query(`INSERT INTO dashboard_group_access (id, dashboard_id, group_id, granted_by) VALUES ($1, $2, $3, $4)`,
+      [id, dashboardId, groupId, userId]);
   }
-
   return true;
 }
 

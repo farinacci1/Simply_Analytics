@@ -55,6 +55,7 @@ const DashboardWidget = ({
 
   const widgetRef = useRef(null);
   const menuRef = useRef(null);
+  const menuBtnRef = useRef(null);
 
   // ── Parsed fields ──
   const {
@@ -226,7 +227,11 @@ const DashboardWidget = ({
 
   // ── Widget style ──
   const getWidgetStyle = () => {
-    if (isGridLayout) return { opacity: isDragging ? 0.5 : 1 };
+    if (isGridLayout) {
+      return {
+        opacity: isDragging ? 0.5 : 1,
+      };
+    }
     const w = size.width || widget.position?.w || 4;
     const h = size.height || widget.position?.h || 3;
     return {
@@ -347,7 +352,12 @@ const DashboardWidget = ({
 
   // ── Refs ──
   const combinedRef = useCallback((node) => { setNodeRef(node); widgetRef.current = node; }, [setNodeRef]);
-  const gridLayoutStyle = isGridLayout ? {} : style;
+  const gridLayoutStyle = isGridLayout ? {
+    '--gs-x': gridPosition?.x ?? 0,
+    '--gs-y': gridPosition?.y ?? 0,
+    '--gs-w': gridPosition?.w ?? 4,
+    '--gs-h': gridPosition?.h ?? 3,
+  } : style;
 
   const handleWidgetClick = (e) => {
     if (widgetRef.current?.dataset?.justResized) return;
@@ -385,7 +395,7 @@ const DashboardWidget = ({
       onClick={handleWidgetClick}
       {...gridStackAttrs}
     >
-      {loading && <div className="widget-loading-bar" />}
+      {loading && <div className="widget-loading-clip"><div className="widget-loading-bar" /></div>}
 
       {/* Header */}
       <div
@@ -412,7 +422,7 @@ const DashboardWidget = ({
 
         {!isEditMode && (
           <div className="widget-actions" ref={menuRef} onPointerDown={(e) => e.stopPropagation()}>
-            <button className="widget-menu-btn" onClick={() => setShowMenu(!showMenu)}><FiMoreVertical /></button>
+            <button className="widget-menu-btn" ref={menuBtnRef} onClick={() => setShowMenu(!showMenu)}><FiMoreVertical /></button>
             {showMenu && (
               <WidgetMenu
                 widgetType={effectiveWidgetType}
@@ -424,6 +434,7 @@ const DashboardWidget = ({
                 onGenerateInsights={generateInsights}
                 insightsLoading={insightsLoading}
                 onCloseMenu={() => setShowMenu(false)}
+                anchorEl={menuBtnRef.current}
               />
             )}
           </div>

@@ -58,9 +58,11 @@ export function BackConfirmModal({ onClose, currentDashboard, saveDashboard, nav
             className="btn btn-danger"
             onClick={() => {
               onClose();
-              useAppStore.getState().clearUnsavedChanges();
+              const store = useAppStore.getState();
+              store.clearUnsavedChanges();
               const folderId = currentDashboard?.folder_id;
-              navigate(folderId ? `/dashboards?folder=${folderId}` : '/dashboards');
+              const base = `/workspaces/${store.activeWorkspace?.id}/dashboards`;
+              navigate(folderId ? `${base}?folder=${folderId}` : base);
             }}
           >
             Leave Without Saving
@@ -71,7 +73,8 @@ export function BackConfirmModal({ onClose, currentDashboard, saveDashboard, nav
               onClose();
               await saveDashboard();
               const folderId = currentDashboard?.folder_id;
-              navigate(folderId ? `/dashboards?folder=${folderId}` : '/dashboards');
+              const base = `/workspaces/${useAppStore.getState().activeWorkspace?.id}/dashboards`;
+              navigate(folderId ? `${base}?folder=${folderId}` : base);
             }}
           >
             <FiSave /> Save & Leave

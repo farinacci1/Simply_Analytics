@@ -4,10 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import samlService from '../services/samlService.js';
 import userService from '../services/userService.js';
 import { getServerInstanceId, revokeSession } from './auth.js';
+import configStore from '../config/configStore.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production';
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+function getJwtSecret() { return configStore.get('JWT_SECRET') || process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production'; }
+function getJwtExpiry() { return configStore.get('JWT_EXPIRY') || process.env.JWT_EXPIRY || '8h'; }
+function getFrontendUrl() { return configStore.get('FRONTEND_URL') || process.env.FRONTEND_URL || 'http://localhost:5173'; }
 
 export const samlRoutes = Router();
 
@@ -33,12 +34,12 @@ samlRoutes.post('/callback', async (req, res) => {
     const { user } = await samlService.validateCallback(req.body);
 
     if (!user.is_active) {
-      return res.redirect(`${FRONTEND_URL}/login?error=account_disabled`);
+      return res.redirect(`${getFrontendUrl()}/login?error=account_disabled`);
     }
 
     const lockStatus = await userService.isAccountLocked(user.id);
     if (lockStatus.locked) {
-      return res.redirect(`${FRONTEND_URL}/login?error=account_locked`);
+      return res.redirect(`${getFrontendUrl()}/login?error=account_locked`);
     }
 
     const existingSessionId = await userService.getActiveSession(user.id);
@@ -60,16 +61,16 @@ samlRoutes.post('/callback', async (req, res) => {
         sessionId,
         instanceId: getServerInstanceId(),
       },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRY }
+      getJwtSecret(),
+      { expiresIn: getJwtExpiry() }
     );
 
     const relayState = req.body.RelayState || '';
     const redirectPath = relayState || '/';
-    res.redirect(`${FRONTEND_URL}${redirectPath}?token=${encodeURIComponent(token)}`);
+    res.redirect(`${getFrontendUrl()}${redirectPath}?token=${encodeURIComponent(token)}`);
   } catch (err) {
     console.error('[SAML] Callback error:', err.message);
-    res.redirect(`${FRONTEND_URL}/login?error=sso_failed&message=${encodeURIComponent(err.message)}`);
+    res.redirect(`${getFrontendUrl()}/login?error=sso_failed&message=${encodeURIComponent(err.message)}`);
   }
 });
 
@@ -89,8 +90,8 @@ samlRoutes.get('/metadata', async (req, res) => {
 samlRoutes.get('/status', (req, res) => {
   res.json({
     enabled: samlService.isEnabled(),
-    issuer: process.env.SAML_ISSUER || 'simply-analytics',
-    callbackUrl: process.env.SAML_CALLBACK_URL || null,
+    issuer: configStore.get('SAML_ISSUER') || 'simply-analytics',
+    callbackUrl: configStore.get('SAML_CALLBACK_URL') || null,
   });
 });
 

@@ -10,7 +10,7 @@ import '../styles/ConfirmDeleteModal.css';
  * @param {function} onCancel - Called when dialog is cancelled
  * @param {string} error - Error message to display (optional)
  */
-const ConfirmDeleteModal = ({ itemName, itemType = 'item', onConfirm, onCancel, error }) => {
+const ConfirmDeleteModal = ({ itemName, itemType = 'item', onConfirm, onCancel, error, warning }) => {
   const [inputValue, setInputValue] = useState('');
   
   const isMatch = inputValue === itemName;
@@ -45,6 +45,13 @@ const ConfirmDeleteModal = ({ itemName, itemType = 'item', onConfirm, onCancel, 
         <p className="dialog-message">
           This action cannot be undone. To confirm, type the {itemType} name exactly as shown:
         </p>
+
+        {warning && (
+          <div className="delete-warning">
+            <FiAlertTriangle />
+            <span>{warning}</span>
+          </div>
+        )}
         
         <div className="item-name-display">
           <code>{itemName}</code>

@@ -1,6 +1,6 @@
 import {
-  authApi, connectionApi,
-  persistSession, restoreSession, clearPersistedSession, persistLastDashboard, getLastDashboard,
+  authApi,
+  persistSession, restoreSession, clearPersistedSession,
 } from '../../api/apiClient';
 import { log } from '../storeUtils';
 
@@ -12,12 +12,13 @@ export const createAuthSlice = (set, get) => ({
   connectionError: null,
 
   // User / Role state
-  currentUser: 'john.doe@company.com',
+  currentUser: null,
   currentRole: 'ANALYST',
   availableRoles: ['ACCOUNTADMIN', 'SYSADMIN', 'ANALYST', 'DATA_ENGINEER', 'VIEWER'],
 
   // Authentication state
   isAuthenticated: false,
+  emergencyMode: false,
 
   // User connections
   userConnections: [],
@@ -26,7 +27,7 @@ export const createAuthSlice = (set, get) => ({
   loadUserConnections: async () => {
     set({ loadingConnections: true });
     try {
-      const response = await fetch('/api/connections', {
+      const response = await fetch('/api/v1/connections', {
         headers: {
           'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
           'Content-Type': 'application/json'
@@ -92,19 +93,51 @@ export const createAuthSlice = (set, get) => ({
     }
   },
 
+  emergencySignIn: async (masterKey) => {
+    set({ isConnecting: true, connectionError: null });
+    try {
+      const response = await authApi.emergencyLogin(masterKey);
+      if (response.success) {
+        persistSession(response.user, response.token);
+        set({
+          isAuthenticated: true,
+          currentUser: response.user,
+          currentRole: 'owner',
+          availableRoles: ['owner'],
+          isConnecting: false,
+          connectionError: null,
+          emergencyMode: true,
+        });
+        return response;
+      } else {
+        throw new Error(response.error || 'Emergency login failed');
+      }
+    } catch (error) {
+      set({ isConnecting: false, connectionError: error.message });
+      throw error;
+    }
+  },
+
+  setCurrentUser: (user) => set({ currentUser: user }),
+
   completeSignIn: (response, username) => {
     persistSession(response.user, response.token);
     
+    const role = response.user?.role || 'viewer';
+
     set({
       isAuthenticated: true,
-      currentUser: response.user?.username || username,
-      currentRole: response.user?.role || 'viewer',
-      availableRoles: ['viewer', 'creator', 'admin', 'owner'],
+      currentUser: response.user || { username },
+      currentRole: role,
+      availableRoles: role === 'bootstrap_admin' ? ['bootstrap_admin'] : ['viewer', 'editor', 'admin', 'owner'],
       isConnecting: false,
       connectionError: null,
       currentDashboard: null,
       dashboards: [],
     });
+
+    // Bootstrap admin — skip all DB-dependent post-login calls
+    if (role === 'bootstrap_admin') return;
     
     const userThemePref = response.user?.theme_preference;
     if (userThemePref) {
@@ -126,8 +159,9 @@ export const createAuthSlice = (set, get) => ({
       console.warn('MFA Grace Period Warning:', response.gracePeriodWarning);
     }
     
-    get().loadDashboards();
+    get().loadWorkspaces();
     get().loadUserConnections();
+    get().checkAskAccess();
   },
 
   complete2FASignIn: async (response) => {
@@ -136,66 +170,6 @@ export const createAuthSlice = (set, get) => ({
       return { success: true };
     }
     throw new Error('MFA verification failed');
-  },
-
-  signInWithKeyPair: async (credentials) => {
-    const { account, username, privateKey, privateKeyPassphrase } = credentials;
-    set({ isLoading: true });
-    try {
-      const response = await authApi.loginWithKeyPair(account, username, privateKey, privateKeyPassphrase);
-      if (response.success) {
-        persistSession(response.user, response.token);
-        
-        set({
-          isAuthenticated: true,
-          currentUser: response.user?.username || username,
-          currentRole: response.user?.role || 'PUBLIC',
-          availableRoles: response.roles || [],
-          isLoading: false,
-          currentDashboard: null,
-          dashboards: [],
-        });
-        get().loadWarehouses();
-        get().loadSemanticViews();
-        get().loadDashboards();
-        return response;
-      } else {
-        throw new Error(response.error || 'Authentication failed');
-      }
-    } catch (error) {
-      set({ isLoading: false });
-      throw error;
-    }
-  },
-
-  signInWithPAT: async (credentials) => {
-    const { account, username, token } = credentials;
-    set({ isLoading: true });
-    try {
-      const response = await authApi.loginWithPAT(account, username, token);
-      if (response.success) {
-        persistSession(response.user, response.token);
-        
-        set({
-          isAuthenticated: true,
-          currentUser: response.user?.username || username,
-          currentRole: response.user?.role || 'PUBLIC',
-          availableRoles: response.roles || [],
-          isLoading: false,
-          currentDashboard: null,
-          dashboards: [],
-        });
-        get().loadWarehouses();
-        get().loadSemanticViews();
-        get().loadDashboards();
-        return response;
-      } else {
-        throw new Error(response.error || 'Authentication failed');
-      }
-    } catch (error) {
-      set({ isLoading: false });
-      throw error;
-    }
   },
 
   signOut: async () => {
@@ -217,6 +191,7 @@ export const createAuthSlice = (set, get) => ({
       currentDashboard: null,
       currentTabId: null,
       semanticModels: [],
+      askHasAccess: null,
     });
   },
 
@@ -233,27 +208,24 @@ export const createAuthSlice = (set, get) => ({
         if (validation.valid) {
           log('Restored session for user:', savedSession.user.username);
           
+          const role = validation.user?.role || savedSession.user.role;
           const rolesResponse = await authApi.getRoles();
           
           set({
             isInitialized: true,
             isLoading: false,
             isAuthenticated: true,
-            currentUser: savedSession.user.username,
-            currentRole: savedSession.user.role,
+            currentUser: savedSession.user,
+            currentRole: role,
             availableRoles: rolesResponse.roles || [],
           });
+
+          // Bootstrap admin — skip DB-dependent calls
+          if (role === 'bootstrap_admin') return;
           
-          const dashboards = await get().loadDashboards();
+          await get().loadWorkspaces();
           get().loadUserConnections();
-          
-          const { dashboardLoadError } = get();
-          if (!dashboardLoadError) {
-            const lastDashboardId = getLastDashboard();
-            if (lastDashboardId && dashboards.some(d => d.id === lastDashboardId)) {
-              get().loadDashboard(lastDashboardId);
-            }
-          }
+          get().checkAskAccess();
           
           return;
         }
@@ -270,78 +242,4 @@ export const createAuthSlice = (set, get) => ({
     });
   },
 
-  connectSnowflake: async (credentials) => {
-    set({ isConnecting: true, connectionError: null });
-
-    try {
-      const result = await authApi.login(credentials);
-      
-      if (result.success) {
-        persistSession(result.token, {
-          username: result.user.username,
-          role: result.user.role,
-        });
-        
-        const rolesResponse = await authApi.getRoles();
-        
-        set({
-          isConnecting: false,
-          isAuthenticated: true,
-          connectionId: result.connectionId,
-          currentUser: result.user.username,
-          currentRole: result.user.role,
-          availableRoles: rolesResponse.roles || [],
-        });
-        
-        get().loadWarehouses();
-        get().loadSemanticViews();
-        get().loadDashboards();
-        
-        return { success: true };
-      } else {
-        set({
-          isConnecting: false,
-          connectionError: result.error || 'Connection failed',
-        });
-        return { success: false, error: result.error };
-      }
-    } catch (error) {
-      set({
-        isConnecting: false,
-        connectionError: error.message,
-      });
-      return { success: false, error: error.message };
-    }
-  },
-
-  disconnect: async () => {
-    const { connectionId } = get();
-    if (connectionId) {
-      try {
-        await authApi.logout();
-      } catch (e) {
-        console.warn('Logout failed:', e);
-      }
-    }
-    clearPersistedSession();
-    set({
-      isAuthenticated: false,
-      connectionId: null,
-      connection: null,
-      currentDashboard: null,
-      currentTabId: null,
-      dashboards: [],
-      semanticModels: [],
-      databases: [],
-      schemas: [],
-      tables: [],
-      columns: [],
-      selectedDatabase: null,
-      selectedSchema: null,
-      selectedTable: null,
-      currentUser: null,
-      currentRole: null,
-      activeView: 'home',
-    });
-  },
 });

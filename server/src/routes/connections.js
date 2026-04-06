@@ -10,12 +10,12 @@ import { clearCachedConnection, closeDashboardConnection, getConnectionCacheStat
 
 // Verbose logging toggle
 const VERBOSE = process.env.VERBOSE_LOGS === 'true';
-const log = (...args) => VERBOSE && log(...args);
+const log = (...args) => VERBOSE && console.log(...args);
 
 export const connectionRoutes = Router();
 
 /**
- * GET /api/connections
+ * GET /api/v1/connections
  * Get all connections for the authenticated user
  */
 connectionRoutes.get('/', async (req, res) => {
@@ -30,7 +30,21 @@ connectionRoutes.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/connections/:id
+ * GET /api/v1/connections/cache-stats
+ * Get connection cache statistics (for debugging)
+ */
+connectionRoutes.get('/cache-stats', async (req, res) => {
+  try {
+    const stats = getConnectionCacheStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Get cache stats error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/connections/:id
  * Get a specific connection (without credentials)
  */
 connectionRoutes.get('/:id', async (req, res) => {
@@ -53,7 +67,7 @@ connectionRoutes.get('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/connections
+ * POST /api/v1/connections
  * Create a new Snowflake connection
  * Only admins and owners can create connections
  */
@@ -87,7 +101,7 @@ connectionRoutes.post('/', async (req, res) => {
 });
 
 /**
- * PUT /api/connections/:id
+ * PUT /api/v1/connections/:id
  * Update an existing connection
  * Only admins and owners can update connections
  */
@@ -111,7 +125,7 @@ connectionRoutes.put('/:id', async (req, res) => {
 });
 
 /**
- * DELETE /api/connections/:id
+ * DELETE /api/v1/connections/:id
  * Delete a connection
  * Only admins and owners can delete connections
  */
@@ -134,7 +148,7 @@ connectionRoutes.delete('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/connections/:id/test
+ * POST /api/v1/connections/:id/test
  * Test a connection to Snowflake
  */
 connectionRoutes.post('/:id/test', async (req, res) => {
@@ -151,7 +165,7 @@ connectionRoutes.post('/:id/test', async (req, res) => {
 });
 
 /**
- * GET /api/connections/:id/resources
+ * GET /api/v1/connections/:id/resources
  * Get available Snowflake resources (warehouses, roles, semantic views)
  * Optional query param: role - if provided, fetches warehouses/views for that role
  */
@@ -170,7 +184,58 @@ connectionRoutes.get('/:id/resources', async (req, res) => {
 });
 
 /**
- * POST /api/connections/:id/refresh
+ * POST /api/v1/connections/:id/config-session
+ * Open a sustained config session — returns available roles.
+ * Uses the dashboard session cache so the Snowflake connection stays open.
+ */
+connectionRoutes.post('/:id/config-session', async (req, res) => {
+  try {
+    const { user } = req;
+    const sessionId = user.activeSessionId || `config-${user.id}`;
+    const result = await connectionService.openConfigSession(req.params.id, user.id, sessionId);
+    res.json(result);
+  } catch (error) {
+    console.error('Config session open error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/connections/:id/config-session/warehouses
+ * Switch role on the sustained config session and return warehouses.
+ * Body: { role }
+ */
+connectionRoutes.post('/:id/config-session/warehouses', async (req, res) => {
+  try {
+    const { user } = req;
+    const { role } = req.body;
+    if (!role) return res.status(400).json({ error: 'role is required' });
+    const sessionId = user.activeSessionId || `config-${user.id}`;
+    const result = await connectionService.configSessionSwitchRole(req.params.id, user.id, sessionId, role);
+    res.json(result);
+  } catch (error) {
+    console.error('Config session switch-role error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/v1/connections/:id/config-session
+ * Close the sustained config session, dropping the Snowflake connection.
+ */
+connectionRoutes.delete('/:id/config-session', async (req, res) => {
+  try {
+    const { user } = req;
+    const sessionId = user.activeSessionId || `config-${user.id}`;
+    clearCachedConnection(sessionId, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.json({ success: true });
+  }
+});
+
+/**
+ * POST /api/v1/connections/:id/refresh
  * Force refresh/clear a cached Snowflake connection
  * Used when IP changes (VPN) or connection becomes stale
  */
@@ -200,7 +265,7 @@ connectionRoutes.post('/:id/refresh', async (req, res) => {
 });
 
 /**
- * POST /api/connections/clear-all
+ * POST /api/v1/connections/clear-all
  * Clear ALL cached Snowflake connections for the current session
  * Used when user wants to force reconnect to all connections
  */
@@ -217,20 +282,6 @@ connectionRoutes.post('/clear-all', async (req, res) => {
     });
   } catch (error) {
     console.error('Clear all connections error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/connections/cache-stats
- * Get connection cache statistics (for debugging)
- */
-connectionRoutes.get('/cache-stats', async (req, res) => {
-  try {
-    const stats = getConnectionCacheStats();
-    res.json(stats);
-  } catch (error) {
-    console.error('Get cache stats error:', error);
     res.status(500).json({ error: error.message });
   }
 });

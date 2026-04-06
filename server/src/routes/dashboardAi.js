@@ -24,7 +24,7 @@ async function resolveConnection(req) {
 }
 
 /**
- * POST /api/dashboard-ai/generate
+ * POST /api/v1/dashboard-ai/generate
  */
 dashboardAiRoutes.post('/generate', async (req, res) => {
   try {
@@ -89,7 +89,7 @@ dashboardAiRoutes.post('/generate', async (req, res) => {
 });
 
 /**
- * POST /api/dashboard-ai/generate-widget
+ * POST /api/v1/dashboard-ai/generate-widget
  */
 dashboardAiRoutes.post('/generate-widget', async (req, res) => {
   try {
@@ -135,7 +135,7 @@ dashboardAiRoutes.post('/generate-widget', async (req, res) => {
 });
 
 /**
- * POST /api/dashboard-ai/modify
+ * POST /api/v1/dashboard-ai/modify
  */
 dashboardAiRoutes.post('/modify', async (req, res) => {
   try {
@@ -258,7 +258,7 @@ dashboardAiRoutes.post('/chat', async (req, res) => {
 });
 
 /**
- * POST /api/dashboard-ai/explore
+ * POST /api/v1/dashboard-ai/explore
  * Data Explorer — investigative AI agent that queries data to answer business questions
  */
 dashboardAiRoutes.post('/explore', async (req, res) => {

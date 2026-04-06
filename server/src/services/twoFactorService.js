@@ -15,11 +15,40 @@ import {
 import { query, jsonSet, jsonDelete, jsonConcat, parseJson, now } from '../db/db.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import crypto from 'crypto';
+import configStore from '../config/configStore.js';
 
-// App configuration for WebAuthn
-const RP_NAME = process.env.APP_NAME || 'Simply Analytics';
-const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
-const RP_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+// WebAuthn relying-party values — read dynamically so they adapt to the
+// deployment environment (Docker, cloud, custom domain, etc.).
+// Falls back to deriving RP_ID and RP_ORIGIN from FRONTEND_URL when the
+// explicit keys aren't set, so a single FRONTEND_URL config is enough.
+function getRpName() { return configStore.get('APP_NAME') || 'Simply Analytics'; }
+function getRpId() {
+  const explicit = configStore.get('WEBAUTHN_RP_ID');
+  if (explicit) return explicit;
+  const frontendUrl = configStore.get('FRONTEND_URL');
+  if (frontendUrl) {
+    try { return new URL(frontendUrl).hostname; } catch (_) {}
+  }
+  return 'localhost';
+}
+// Returns a string or an array of strings. Comma-separated values in
+// WEBAUTHN_ORIGIN are split into an array so passkeys work when users
+// access the app from multiple URLs (e.g. https://app.com, https://app.com:8080).
+function getRpOrigin() {
+  const explicit = configStore.get('WEBAUTHN_ORIGIN');
+  if (explicit) {
+    const origins = explicit.split(',').map(o => o.trim()).filter(Boolean);
+    return origins.length === 1 ? origins[0] : origins;
+  }
+  const frontendUrl = configStore.get('FRONTEND_URL');
+  if (frontendUrl) return frontendUrl.replace(/\/+$/, '');
+  return 'http://localhost:5173';
+}
+// Single origin used during registration (first configured origin).
+function getRpOriginForRegistration() {
+  const origins = getRpOrigin();
+  return Array.isArray(origins) ? origins[0] : origins;
+}
 
 // Configure authenticator with time window for clock drift
 // Window of 2 means it accepts codes from 60 seconds in the past to 60 seconds in the future
@@ -37,7 +66,7 @@ export async function generateTotpSecret(userId, username) {
   const secret = authenticator.generateSecret();
   
   // Create otpauth URL
-  const otpauthUrl = authenticator.keyuri(username, RP_NAME, secret);
+  const otpauthUrl = authenticator.keyuri(username, getRpName(), secret);
   
   // Generate QR code as data URL
   const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
@@ -256,8 +285,8 @@ export async function generatePasskeyRegistrationOptions(userId, username, displ
   // Generate registration options
   // In @simplewebauthn/server v10+, excludeCredentials[].id should be a base64url STRING
   const options = await generateRegistrationOptions({
-    rpName: RP_NAME,
-    rpID: RP_ID,
+    rpName: getRpName(),
+    rpID: getRpId(),
     userID: userIdBytes,
     userName: username,
     userDisplayName: displayName || username,
@@ -295,8 +324,8 @@ export async function verifyPasskeyRegistration(userId, response, credentialName
   const verification = await verifyRegistrationResponse({
     response,
     expectedChallenge: challenge,
-    expectedOrigin: RP_ORIGIN,
-    expectedRPID: RP_ID,
+    expectedOrigin: getRpOrigin(),
+    expectedRPID: getRpId(),
   });
   
   if (!verification.verified) {
@@ -363,7 +392,7 @@ export async function generatePasskeyAuthOptions(userId) {
   // Generate authentication options
   // In @simplewebauthn/server v10+, allowCredentials[].id should be a base64url STRING
   const options = await generateAuthenticationOptions({
-    rpID: RP_ID,
+    rpID: getRpId(),
     allowCredentials: credentials.map(cred => ({
       id: cred.credentialID, // Already stored as base64url string
       type: 'public-key',
@@ -425,8 +454,8 @@ export async function verifyPasskeyAuthentication(userId, response) {
     verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge: challenge,
-      expectedOrigin: RP_ORIGIN,
-      expectedRPID: RP_ID,
+      expectedOrigin: getRpOrigin(),
+      expectedRPID: getRpId(),
       authenticator: {
         credentialID: base64urlToUint8Array(credential.credentialID),
         credentialPublicKey: base64urlToUint8Array(credential.credentialPublicKey),
@@ -560,7 +589,8 @@ export async function get2FAStatus(userId) {
       two_factor_grace_days,
       account_locked,
       account_locked_reason,
-      account_unlock_expires
+      account_unlock_expires,
+      auth_provider
     FROM users WHERE id = $1`,
     [userId]
   );
@@ -570,7 +600,8 @@ export async function get2FAStatus(userId) {
   }
   
   const user = result.rows[0];
-  const has2FA = user.totp_enabled || user.passkey_enabled;
+  const isSso = user.auth_provider === 'saml';
+  const has2FA = isSso || user.totp_enabled || user.passkey_enabled;
   const passkeyCount = (user.passkey_credentials || []).length;
   
   // Calculate grace period status
@@ -617,32 +648,57 @@ export async function get2FAStatus(userId) {
 
 /**
  * Check if user can proceed (not locked, or within grace period)
+ * Owner accounts are never locked out — they can always log in,
+ * but MFA is still enforced at the action level (dashboards, user mgmt, etc.).
  */
 export async function checkUserCanProceed(userId) {
-  const userResult = await query('SELECT auth_provider FROM users WHERE id = $1', [userId]);
-  if (userResult.rows[0]?.auth_provider === 'saml') {
+  const userResult = await query('SELECT auth_provider, role FROM users WHERE id = $1', [userId]);
+  const userRow = userResult.rows[0];
+  if (userRow?.auth_provider === 'saml') {
     return { canProceed: true, reason: 'sso_user' };
   }
 
+  const isOwner = userRow?.role === 'owner';
   const status = await get2FAStatus(userId);
   
   // Check if account is temporarily unlocked
   if (status.accountLocked && status.accountUnlockExpires) {
     const unlockExpires = new Date(status.accountUnlockExpires);
     if (new Date() < unlockExpires) {
-      // Temporarily unlocked
       return { canProceed: true, reason: 'temporarily_unlocked' };
     }
   }
   
   // Check if account is locked
   if (status.accountLocked) {
+    if (isOwner) {
+      // Owner is never locked out — clear the lock and let them proceed
+      await query(
+        `UPDATE users SET account_locked = false, account_locked_reason = NULL WHERE id = $1`,
+        [userId]
+      );
+      return {
+        canProceed: true,
+        needs2FA: status.has2FA,
+        gracePeriodDaysRemaining: status.gracePeriodDaysRemaining,
+        mfaActionRequired: !status.has2FA,
+      };
+    }
     return { canProceed: false, reason: 'account_locked', message: status.accountLockedReason };
   }
   
   // Check if 2FA is required but not set up and grace period expired
   if (status.twoFactorRequired && !status.has2FA && status.gracePeriodExpired) {
-    // Lock the account
+    if (isOwner) {
+      // Owner: allow login but flag that MFA is required for all actions
+      return {
+        canProceed: true,
+        needs2FA: false,
+        gracePeriodDaysRemaining: 0,
+        mfaActionRequired: true,
+      };
+    }
+    // Non-owner: lock the account
     await query(
       `UPDATE users 
        SET account_locked = true, 
@@ -658,6 +714,7 @@ export async function checkUserCanProceed(userId) {
     canProceed: true, 
     needs2FA: status.has2FA,
     gracePeriodDaysRemaining: status.gracePeriodDaysRemaining,
+    mfaActionRequired: status.twoFactorRequired && !status.has2FA,
   };
 }
 
@@ -695,7 +752,9 @@ export async function unlockUserAccount(userId, unlockDurationHours = null) {
       `UPDATE users 
        SET account_locked = false,
            account_locked_reason = NULL,
-           account_unlock_expires = $1
+           account_unlock_expires = $1,
+           failed_login_attempts = 0,
+           last_failed_login = NULL
        WHERE id = $2`,
       [unlockExpires, userId]
     );
@@ -708,6 +767,8 @@ export async function unlockUserAccount(userId, unlockDurationHours = null) {
        SET account_locked = false,
            account_locked_reason = NULL,
            account_unlock_expires = NULL,
+           failed_login_attempts = 0,
+           last_failed_login = NULL,
            two_factor_grace_period_start = ${now()}
        WHERE id = $1`,
       [userId]

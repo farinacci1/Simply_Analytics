@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiDatabase, FiX, FiAlertCircle, FiRefreshCw, FiCheck } from 'react-icons/fi';
+import { FiDatabase, FiX, FiAlertCircle, FiRefreshCw, FiCheck, FiLayers, FiCpu } from 'react-icons/fi';
 
 export function ReplaceConnectionModal({
   dashboard,
@@ -10,8 +10,12 @@ export function ReplaceConnectionModal({
   selectedConnectionId,
   setSelectedConnectionId,
   handleReplaceConnection,
+  error,
 }) {
   if (!showReplaceConnection) return null;
+
+  const connections = Array.isArray(availableConnections) ? availableConnections : [];
+  const currentConnectionId = dashboard?.connection_id;
 
   return (
     <div className="replace-connection-overlay">
@@ -32,35 +36,56 @@ export function ReplaceConnectionModal({
         </div>
         <div className="modal-body">
           <p className="replace-warning">
-            <FiAlertCircle /> Changing the connection may affect widget queries and data access.
+            <FiAlertCircle /> The new connection must have the same semantic views and agents assigned to it in this workspace.
           </p>
 
+          {error && (
+            <div className="settings-error" style={{ marginBottom: 12 }}>{error}</div>
+          )}
+
           <div className="form-group">
-            <label className="form-label">Select Connection</label>
+            <label className="form-label">Workspace Connections</label>
             {loadingConnections ? (
               <div className="loading-connections">
                 <FiRefreshCw className="spin" /> Loading connections...
               </div>
-            ) : availableConnections.length === 0 ? (
-              <p className="no-connections">No connections available. Create a connection in Settings first.</p>
+            ) : connections.length === 0 ? (
+              <p className="no-connections">No connections allocated to this workspace.</p>
             ) : (
               <div className="connections-list">
-                {availableConnections.map((conn) => (
-                  <label key={conn.id} className={`connection-option ${selectedConnectionId === conn.id ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name="connection"
-                      value={conn.id}
-                      checked={selectedConnectionId === conn.id}
-                      onChange={() => setSelectedConnectionId(conn.id)}
-                    />
-                    <div className="connection-option-info">
-                      <span className="connection-name">{conn.name}</span>
-                      <span className="connection-account">{conn.account}</span>
-                    </div>
-                    {conn.id === dashboard?.connection_id && <span className="current-badge">Current</span>}
-                  </label>
-                ))}
+                {connections.map((wc) => {
+                  const isCurrent = wc.connection_id === currentConnectionId;
+                  const isSelected = selectedConnectionId === wc.id;
+                  return (
+                    <label
+                      key={wc.id}
+                      className={`connection-option ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="connection"
+                        value={wc.id}
+                        checked={isSelected}
+                        onChange={() => setSelectedConnectionId(wc.id)}
+                        disabled={isCurrent}
+                      />
+                      <div className="connection-option-info">
+                        <span className="connection-name">{wc.connection_name}</span>
+                        <span className="connection-account">
+                          {[wc.connection_account, wc.role, wc.warehouse].filter(Boolean).join(' · ')}
+                        </span>
+                        {(wc.views?.length > 0 || wc.agents?.length > 0) && (
+                          <span className="connection-resources">
+                            {wc.views?.length > 0 && <><FiLayers size={11} /> {wc.views.length} view{wc.views.length !== 1 ? 's' : ''}</>}
+                            {wc.views?.length > 0 && wc.agents?.length > 0 && ' · '}
+                            {wc.agents?.length > 0 && <><FiCpu size={11} /> {wc.agents.length} agent{wc.agents.length !== 1 ? 's' : ''}</>}
+                          </span>
+                        )}
+                      </div>
+                      {isCurrent && <span className="current-badge">Current</span>}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -78,7 +103,7 @@ export function ReplaceConnectionModal({
           <button
             className="btn btn-primary"
             onClick={handleReplaceConnection}
-            disabled={!selectedConnectionId || selectedConnectionId === dashboard?.connection_id}
+            disabled={!selectedConnectionId || connections.find(c => c.id === selectedConnectionId)?.connection_id === currentConnectionId}
           >
             <FiCheck /> Replace Connection
           </button>

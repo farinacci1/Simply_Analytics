@@ -1,9 +1,10 @@
 import { fetchApi, safeJson } from './fetchCore.js';
 
 export const folderApi = {
-  async getContents(folderId = null) {
-    const url = folderId ? `/folders/${folderId}/contents` : '/folders/contents';
-    const res = await fetchApi(url);
+  async getContents(folderId = null, workspaceId = null) {
+    const base = folderId ? `/folders/${folderId}/contents` : '/folders/contents';
+    const params = workspaceId ? `?workspaceId=${workspaceId}` : '';
+    const res = await fetchApi(base + params);
     return safeJson(res, { folders: [], dashboards: [] });
   },
 
@@ -52,10 +53,10 @@ export const folderApi = {
     return safeJson(res, { success: true });
   },
 
-  async search(query) {
+  async search(query, workspaceId = null) {
     const res = await fetchApi('/folders/search', {
       method: 'POST',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, workspaceId }),
     });
     return safeJson(res, { folders: [], dashboards: [] });
   },
@@ -72,32 +73,4 @@ export const folderApi = {
     return safeJson(res, null);
   },
 
-  // Folder access management
-  async getAccess(folderId) {
-    const res = await fetchApi(`/folders/${folderId}/access`);
-    return safeJson(res, { groups: [] });
-  },
-
-  async grantAccess(folderId, groupId) {
-    const res = await fetchApi(`/folders/${folderId}/access`, {
-      method: 'POST',
-      body: JSON.stringify({ groupId }),
-    });
-    if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to grant access' });
-      throw new Error(error.error);
-    }
-    return safeJson(res, { success: true });
-  },
-
-  async revokeAccess(folderId, groupId) {
-    const res = await fetchApi(`/folders/${folderId}/access/${groupId}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      const error = await safeJson(res, { error: 'Failed to revoke access' });
-      throw new Error(error.error);
-    }
-    return safeJson(res, { success: true });
-  },
 };

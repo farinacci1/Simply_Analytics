@@ -48,7 +48,7 @@ async function getSnowflakeConnectionFromId(connectionId, userId, sessionId, opt
 }
 
 /**
- * GET /api/semantic/views
+ * GET /api/v1/semantic/views
  * List all semantic views accessible by the current user's role
  */
 semanticRoutes.get('/views', async (req, res, next) => {
@@ -87,7 +87,7 @@ semanticRoutes.get('/views', async (req, res, next) => {
 });
 
 /**
- * GET /api/semantic/views/:database/:schema/:name
+ * GET /api/v1/semantic/views/:database/:schema/:name
  * Get details/metadata for a specific semantic view
  * Query param: connectionId - use stored connection instead of session
  */
@@ -292,7 +292,7 @@ async function getSemanticViewMetadata(connection, semanticViewFQN, tempConnecti
 }
 
 /**
- * POST /api/semantic/preview
+ * POST /api/v1/semantic/preview
  * Generate SQL preview from field configuration
  * 
  * This is the SINGLE SOURCE OF TRUTH for SQL generation.
@@ -537,7 +537,7 @@ semanticRoutes.post('/preview', async (req, res, next) => {
 });
 
 /**
- * POST /api/semantic/query
+ * POST /api/v1/semantic/query
  * Query a semantic view with filters
  * 
  * Body: {
@@ -688,7 +688,7 @@ semanticRoutes.post('/query', async (req, res, next) => {
 });
 
 /**
- * POST /api/semantic/distinct-values
+ * POST /api/v1/semantic/distinct-values
  * Get distinct values for a field in a semantic view (for filter dropdowns)
  * 
  * Body: {
@@ -812,7 +812,7 @@ semanticRoutes.post('/distinct-values', async (req, res, next) => {
 });
 
 /**
- * POST /api/semantic/pivot
+ * POST /api/v1/semantic/pivot
  * Query a semantic view with SQL-level pivoting
  * 
  * Body: {
@@ -1035,7 +1035,7 @@ semanticRoutes.post('/pivot', async (req, res, next) => {
 // It handles unified widget config and generates SQL with proper DIMENSIONS/METRICS classification
 
 /**
- * GET /api/semantic/databases
+ * GET /api/v1/semantic/databases
  * List databases accessible to the user
  */
 semanticRoutes.get('/databases', async (req, res, next) => {
@@ -1059,7 +1059,7 @@ semanticRoutes.get('/databases', async (req, res, next) => {
 });
 
 /**
- * GET /api/semantic/schemas/:database
+ * GET /api/v1/semantic/schemas/:database
  * List schemas in a database
  */
 semanticRoutes.get('/schemas/:database', async (req, res, next) => {
@@ -1256,7 +1256,7 @@ function escapeString(str) {
 // ============================================================================
 
 /**
- * POST /api/semantic/cortex/complete
+ * POST /api/v1/semantic/cortex/complete
  * Use Cortex COMPLETE for LLM text generation / natural language queries
  */
 semanticRoutes.post('/cortex/complete', async (req, res) => {
@@ -1332,7 +1332,7 @@ semanticRoutes.post('/cortex/complete', async (req, res) => {
 });
 
 /**
- * POST /api/semantic/cortex/ask
+ * POST /api/v1/semantic/cortex/ask
  * Natural language query against a semantic view using Cortex
  * Translates natural language to semantic view query
  */
@@ -1429,7 +1429,7 @@ Do not include any other text, markdown, or code blocks - just the raw JSON.`;
 });
 
 /**
- * POST /api/semantic/cortex/insights
+ * POST /api/v1/semantic/cortex/insights
  * Generate AI insights about query results
  */
 semanticRoutes.post('/cortex/insights', async (req, res) => {
@@ -1542,7 +1542,7 @@ Be concise and focus on business-relevant observations.`;
 });
 
 /**
- * POST /api/semantic/cortex/sentiment
+ * POST /api/v1/semantic/cortex/sentiment
  * Analyze sentiment of text data
  */
 semanticRoutes.post('/cortex/sentiment', async (req, res) => {
@@ -1576,7 +1576,7 @@ semanticRoutes.post('/cortex/sentiment', async (req, res) => {
 });
 
 /**
- * POST /api/semantic/cortex/summarize
+ * POST /api/v1/semantic/cortex/summarize
  * Summarize text data
  */
 semanticRoutes.post('/cortex/summarize', async (req, res) => {
@@ -1610,7 +1610,7 @@ semanticRoutes.post('/cortex/summarize', async (req, res) => {
 });
 
 /**
- * POST /api/semantic/cortex/translate
+ * POST /api/v1/semantic/cortex/translate
  * Translate text
  */
 semanticRoutes.post('/cortex/translate', async (req, res) => {
@@ -1644,7 +1644,7 @@ semanticRoutes.post('/cortex/translate', async (req, res) => {
 });
 
 /**
- * GET /api/semantic/cortex/models
+ * GET /api/v1/semantic/cortex/models
  * List available Cortex LLM models
  */
 semanticRoutes.get('/cortex/models', async (req, res) => {
@@ -1672,7 +1672,7 @@ semanticRoutes.get('/cortex/models', async (req, res) => {
 // ============================================================================
 
 /**
- * POST /api/semantic/cortex/agent/run
+ * POST /api/v1/semantic/cortex/agent/run
  * Proxy to Snowflake Cortex Agent :run API with SSE streaming.
  * Uses the dashboard's stored connection credentials to authenticate.
  *
@@ -1836,7 +1836,7 @@ semanticRoutes.post('/cortex/agent/run', async (req, res) => {
 // ============================================================================
 
 /**
- * POST /api/semantic/query-with-custom-columns
+ * POST /api/v1/semantic/query-with-custom-columns
  * Execute a semantic view query with custom calculated columns
  */
 semanticRoutes.post('/query-with-custom-columns', async (req, res) => {

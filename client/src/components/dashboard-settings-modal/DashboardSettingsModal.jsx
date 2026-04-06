@@ -102,34 +102,16 @@ const DashboardSettingsModal = ({ dashboard, isOpen, onClose, onSave }) => {
               setSelectedConnectionId={s.setSelectedConnectionId}
               setShowReplaceConnection={s.setShowReplaceConnection}
               warehouse={s.warehouse}
-              setWarehouse={s.setWarehouse}
-              availableWarehouses={s.availableWarehouses}
-              loadingResources={s.loadingResources}
               role={s.role}
-              setRole={s.setRole}
-              availableRoles={s.availableRoles}
               isPublished={s.isPublished}
               setIsPublished={s.setIsPublished}
-              visibility={s.visibility}
-              setVisibility={s.setVisibility}
-              accessList={s.accessList}
-              removeAccessRole={s.removeAccessRole}
-              groupSearchRef={s.groupSearchRef}
-              groupSearchQuery={s.groupSearchQuery}
-              setGroupSearchQuery={s.setGroupSearchQuery}
-              newRole={s.newRole}
-              setNewRole={s.setNewRole}
-              showGroupDropdown={s.showGroupDropdown}
-              setShowGroupDropdown={s.setShowGroupDropdown}
-              filteredGroupsForAccess={s.filteredGroupsForAccess}
-              selectGroupForAccess={s.selectGroupForAccess}
-              addAccessRole={s.addAccessRole}
               adminRoles={s.adminRoles}
               transferOwnerTo={s.transferOwnerTo}
               setTransferOwnerTo={s.setTransferOwnerTo}
               showTransferConfirm={s.showTransferConfirm}
               setShowTransferConfirm={s.setShowTransferConfirm}
               handleTransferOwnership={s.handleTransferOwnership}
+              connectionInherited={s.connectionInherited}
             />
           )}
 
@@ -175,6 +157,7 @@ const DashboardSettingsModal = ({ dashboard, isOpen, onClose, onSave }) => {
         selectedConnectionId={s.selectedConnectionId}
         setSelectedConnectionId={s.setSelectedConnectionId}
         handleReplaceConnection={s.handleReplaceConnection}
+        error={s.error}
       />
     </div>
   );

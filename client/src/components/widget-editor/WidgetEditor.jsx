@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { FiX } from 'react-icons/fi';
 import { useAppStore } from '../../store/appStore';
 
 import { 
@@ -116,10 +117,12 @@ const WidgetEditor = ({ widget, dashboardId, onClose, onSave, onAutoSave, isNew 
     widget, semanticViewId, setSemanticViewId,
   });
 
-  const allDimensions = useMemo(() => [
-    ...(viewMetadata?.facts || []),
-    ...(viewMetadata?.dimensions || []),
-  ].map(dim => ({ ...dim, isDatePart: false })), [viewMetadata]);
+  const allDimensions = useMemo(() => {
+    return [
+      ...(viewMetadata?.facts || []),
+      ...(viewMetadata?.dimensions || []),
+    ].map(dim => ({ ...dim, isDatePart: false }));
+  }, [viewMetadata]);
 
   const normalizeFieldName = useCallback((name) => name?.toUpperCase?.() || '', []);
 
@@ -163,7 +166,7 @@ const WidgetEditor = ({ widget, dashboardId, onClose, onSave, onAutoSave, isNew 
   } = useFilters({
     initialFilters: widget?.filtersApplied || [],
     allDimensions, measures: viewMetadata?.measures,
-    customColumns, getFullyQualifiedNameRef, currentDashboard,
+    customColumns, getFullyQualifiedNameRef, currentDashboard: currentDashboard,
   });
 
   const {
@@ -420,7 +423,7 @@ const WidgetEditor = ({ widget, dashboardId, onClose, onSave, onAutoSave, isNew 
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === 'Escape') { if (showFormulaBar) return; onClose(); }
+      if (e.key === 'Escape') { if (showFormulaBar) return; onClose?.(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSave(); }
     };
     document.addEventListener('keydown', handler);
@@ -487,7 +490,7 @@ const WidgetEditor = ({ widget, dashboardId, onClose, onSave, onAutoSave, isNew 
     deleteCalcFieldHelper(col, {
       columns, rows, markFields,
       setCustomColumns, setCalcFieldDeleteError,
-      currentDashboard, semanticViewId,
+      currentDashboard: currentDashboard, semanticViewId,
     });
   };
 
@@ -504,7 +507,7 @@ const WidgetEditor = ({ widget, dashboardId, onClose, onSave, onAutoSave, isNew 
       calculatedFields: customColumns,
     }] : [];
 
-    if ((customColumns.length > 0 || Object.keys(columnAliases).length > 0) && currentDashboard && semanticViewId) {
+    if ((customColumns.length > 0 || Object.keys(columnAliases).length > 0) && currentDashboard?.id && semanticViewId) {
       const dashboardViews = [...(currentDashboard.semanticViewsReferenced || [])];
       const existingIdx = dashboardViews.findIndex(v => (typeof v === 'string' ? v : v.name) === semanticViewId);
       let updatedViews;

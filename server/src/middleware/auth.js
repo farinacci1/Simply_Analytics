@@ -17,21 +17,28 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { executeQuery, createConnection } from '../db/dashboardSessionManager.js';
 import sessionStore from '../db/redisSessionStore.js';
+import configStore from '../config/configStore.js';
 
 // Verbose logging toggle
 const VERBOSE = process.env.VERBOSE_LOGS === 'true';
-const log = (...args) => VERBOSE && log(...args);
+const log = (...args) => VERBOSE && console.log(...args);
 
-// JWT configuration
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
-const SESSION_TIMEOUT = parseInt(process.env.SESSION_TIMEOUT_MINUTES || '20', 10) * 60 * 1000;
+// JWT configuration — read dynamically so hot-reloaded config takes effect
+function getJwtSecret() {
+  return configStore.get('JWT_SECRET') || 'fallback-dev-secret';
+}
+function getJwtExpiry() {
+  return configStore.get('JWT_EXPIRY') || '8h';
+}
+function getSessionTimeout() {
+  return parseInt(configStore.get('SESSION_TIMEOUT_MINUTES') || '20', 10) * 60 * 1000;
+}
 
-// OAuth configuration (set these in environment variables)
-const SNOWFLAKE_OAUTH_CLIENT_ID = process.env.SNOWFLAKE_OAUTH_CLIENT_ID;
-const SNOWFLAKE_OAUTH_CLIENT_SECRET = process.env.SNOWFLAKE_OAUTH_CLIENT_SECRET;
-const SNOWFLAKE_OAUTH_REDIRECT_URI = process.env.SNOWFLAKE_OAUTH_REDIRECT_URI || 'http://localhost:3001/api/auth/callback';
-const SNOWFLAKE_ACCOUNT = process.env.SNOWFLAKE_ACCOUNT;
+// OAuth configuration — read dynamically from configStore
+function getOAuthClientId() { return configStore.get('SNOWFLAKE_OAUTH_CLIENT_ID'); }
+function getOAuthClientSecret() { return configStore.get('SNOWFLAKE_OAUTH_CLIENT_SECRET'); }
+function getOAuthRedirectUri() { return configStore.get('SNOWFLAKE_OAUTH_REDIRECT_URI') || 'http://localhost:3001/api/auth/callback'; }
+function getSnowflakeAccount() { return configStore.get('SNOWFLAKE_ACCOUNT'); }
 
 // In-memory session store for Snowflake connection objects
 // (Connections can't be serialized to Redis, so we keep them in memory)
@@ -41,30 +48,6 @@ const sessions = new Map();
 // Pending OAuth states (for CSRF protection)
 const pendingOAuthStates = new Map();
 
-/**
- * Initialize Redis session store
- * Call this during server startup
- */
-export async function initSessionStore() {
-  try {
-    const redisActive = await sessionStore.initRedis();
-    if (redisActive) {
-      log('✅ Redis session store enabled for distributed sessions');
-    } else {
-      log('📦 Using in-memory session store (single instance mode)');
-    }
-    
-    // Set up periodic cleanup of expired sessions
-    setInterval(() => {
-      sessionStore.cleanupExpiredSessions(SESSION_TIMEOUT);
-    }, 5 * 60 * 1000); // Every 5 minutes
-    
-    return redisActive;
-  } catch (error) {
-    console.error('Failed to initialize session store:', error);
-    return false;
-  }
-}
 
 /**
  * User context attached to authenticated requests
@@ -106,7 +89,7 @@ export function generateToken(userContext) {
     iat: Math.floor(Date.now() / 1000),
   };
 
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: getJwtExpiry() });
 }
 
 /**
@@ -140,7 +123,7 @@ async function createSession(sessionId, userContext, connection, extras = {}) {
  */
 export function verifyToken(token, serverInstanceId = null) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     
     // Check if JWT was issued by a different server instance (server restart)
     if (serverInstanceId && decoded.instanceId && decoded.instanceId !== serverInstanceId) {
@@ -235,7 +218,7 @@ export async function authenticateWithSnowflake(credentials) {
       success: true,
       token,
       user: userContext.toJSON(),
-      expiresIn: JWT_EXPIRY,
+      expiresIn: getJwtExpiry(),
     };
   } catch (error) {
     console.error('Authentication failed:', error.message);
@@ -257,7 +240,8 @@ export function getOAuthAuthorizationUrl(account) {
     throw new Error('Snowflake account is required');
   }
   
-  if (!SNOWFLAKE_OAUTH_CLIENT_ID) {
+  const clientId = getOAuthClientId();
+  if (!clientId) {
     throw new Error('OAuth not configured. Set SNOWFLAKE_OAUTH_CLIENT_ID and SNOWFLAKE_OAUTH_CLIENT_SECRET in your environment.');
   }
   
@@ -272,11 +256,11 @@ export function getOAuthAuthorizationUrl(account) {
   // Clean up old states after 10 minutes
   setTimeout(() => pendingOAuthStates.delete(state), 10 * 60 * 1000);
   
-  const redirectUri = SNOWFLAKE_OAUTH_REDIRECT_URI || 'http://localhost:3001/api/auth/callback';
+  const redirectUri = getOAuthRedirectUri();
   
   // Build Snowflake OAuth authorization URL
   const authUrl = new URL(`https://${account}.snowflakecomputing.com/oauth/authorize`);
-  authUrl.searchParams.set('client_id', SNOWFLAKE_OAUTH_CLIENT_ID);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('scope', 'session:role:any');
@@ -303,7 +287,7 @@ export async function exchangeOAuthCode(code, state) {
   
   // Exchange authorization code for access token
   const tokenUrl = `https://${account}.snowflakecomputing.com/oauth/token-request`;
-  const redirectUri = SNOWFLAKE_OAUTH_REDIRECT_URI || 'http://localhost:3001/api/auth/callback';
+  const redirectUri = getOAuthRedirectUri();
   
   log('Exchanging OAuth code for token...');
   const response = await fetch(tokenUrl, {
@@ -311,7 +295,7 @@ export async function exchangeOAuthCode(code, state) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': 'Basic ' + Buffer.from(
-        `${SNOWFLAKE_OAUTH_CLIENT_ID}:${SNOWFLAKE_OAUTH_CLIENT_SECRET}`
+        `${getOAuthClientId()}:${getOAuthClientSecret()}`
       ).toString('base64'),
     },
     body: new URLSearchParams({
@@ -380,7 +364,7 @@ export async function exchangeOAuthCode(code, state) {
     success: true,
     token,
     user: userContext.toJSON(),
-    expiresIn: JWT_EXPIRY,
+    expiresIn: getJwtExpiry(),
   };
 }
 
@@ -388,7 +372,7 @@ export async function exchangeOAuthCode(code, state) {
  * Check if custom OAuth is configured (for production redirect flow)
  */
 export function isOAuthConfigured() {
-  return !!(SNOWFLAKE_OAUTH_CLIENT_ID && SNOWFLAKE_OAUTH_CLIENT_SECRET);
+  return !!(getOAuthClientId() && getOAuthClientSecret());
 }
 
 // ============================================================
@@ -461,7 +445,7 @@ export async function authenticateWithPAT(credentials) {
       success: true,
       token: jwtToken,
       user: userContext.toJSON(),
-      expiresIn: JWT_EXPIRY,
+      expiresIn: getJwtExpiry(),
     };
   } catch (error) {
     console.error('PAT authentication failed:', error);
@@ -526,7 +510,7 @@ export async function authenticateWithKeyPair(credentials) {
       success: true,
       token,
       user: userContext.toJSON(),
-      expiresIn: JWT_EXPIRY,
+      expiresIn: getJwtExpiry(),
     };
   } catch (error) {
     console.error('Key pair authentication failed:', error.message);
@@ -683,7 +667,7 @@ export async function logout(sessionId) {
  */
 export async function authMiddleware(req, res, next) {
   // Skip auth for health checks and login
-  const publicPaths = ['/api/health', '/api/auth/login'];
+  const publicPaths = ['/api/v1/health', '/api/v1/auth/login'];
   if (publicPaths.some(p => req.path.startsWith(p))) {
     return next();
   }
@@ -792,7 +776,7 @@ export async function authMiddleware(req, res, next) {
     const sessionData = redisSession || localSession;
     
     // Check session timeout
-    if (Date.now() - sessionData.lastActivity > SESSION_TIMEOUT) {
+    if (Date.now() - sessionData.lastActivity > getSessionTimeout()) {
       await logout(decoded.sessionId);
       return res.status(401).json({ 
         error: 'Session timed out',
@@ -854,7 +838,7 @@ export function optionalAuthMiddleware(req, res, next) {
       // Legacy Snowflake session-based auth
       else if (decoded.sessionId) {
         const session = sessions.get(decoded.sessionId);
-        if (session && Date.now() - session.lastActivity <= SESSION_TIMEOUT) {
+        if (session && Date.now() - session.lastActivity <= getSessionTimeout()) {
           session.lastActivity = Date.now();
           req.user = session.userContext;
           req.sessionId = decoded.sessionId;
@@ -882,7 +866,7 @@ export function cleanupExpiredSessions() {
   let cleaned = 0;
 
   for (const [sessionId, session] of sessions.entries()) {
-    if (now - session.lastActivity > SESSION_TIMEOUT) {
+    if (now - session.lastActivity > getSessionTimeout()) {
       logout(sessionId);
       cleaned++;
     }

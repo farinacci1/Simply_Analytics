@@ -19,7 +19,7 @@ export function DashboardToolbar({
   setShowSettings, showAiChat, setShowAiChat,
   handleAddSpecialWidget, handleOpenNewWidget, handleDeselectWidget,
   setExitEditConfirm, setBackConfirm,
-  navigate,
+  navigate, activeWorkspace,
   showFilterPanel, onToggleFilterPanel, filterFieldCount,
 }) {
   return (
@@ -32,7 +32,8 @@ export function DashboardToolbar({
               setBackConfirm(true);
             } else {
               const folderId = currentDashboard?.folder_id;
-              navigate(folderId ? `/dashboards?folder=${folderId}` : '/dashboards');
+              const base = `/workspaces/${activeWorkspace?.id}/dashboards`;
+              navigate(folderId ? `${base}?folder=${folderId}` : base);
             }
           }}
           title="Back to dashboards"

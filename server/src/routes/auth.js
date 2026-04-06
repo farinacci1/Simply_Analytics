@@ -26,9 +26,10 @@ import {
   isSystemRole,
 } from '../middleware/auth.js';
 import { closeDashboardConnection } from '../db/dashboardSessionManager.js';
+import configStore from '../config/configStore.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production';
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h'; // 8 hours max
+function getJwtSecret() { return configStore.get('JWT_SECRET') || process.env.JWT_SECRET || 'simply-analytics-secret-change-in-production'; }
+function getJwtExpiry() { return configStore.get('JWT_EXPIRY') || process.env.JWT_EXPIRY || '8h'; }
 
 // Server instance ID - generated on each startup
 // JWTs issued before a server restart will have a different instanceId and be rejected
@@ -78,7 +79,7 @@ export function revokeSession(sessionId) {
 export const authRoutes = Router();
 
 /**
- * POST /api/auth/login
+ * POST /api/v1/auth/login
  * Authenticate with app username and password
  * Enforces single-session: only one active session per user
  */
@@ -187,7 +188,7 @@ authRoutes.post('/login', async (req, res) => {
           userId: user.id,
           type: 'pending_2fa',
         },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '5m' } // 5 minute expiry for 2FA step
       );
       
@@ -205,9 +206,14 @@ authRoutes.post('/login', async (req, res) => {
     }
 
     // No 2FA enabled - check if within grace period (show warning)
-    const gracePeriodWarning = canProceed.gracePeriodDaysRemaining !== null
-      ? `You have ${canProceed.gracePeriodDaysRemaining} days remaining to set up Multi-Factor Authentication.`
-      : null;
+    let gracePeriodWarning = null;
+    if (canProceed.mfaActionRequired) {
+      gracePeriodWarning = canProceed.gracePeriodDaysRemaining > 0
+        ? `You have ${canProceed.gracePeriodDaysRemaining} days remaining to set up Multi-Factor Authentication.`
+        : 'Multi-Factor Authentication is required. You will not be able to perform any actions until MFA is set up.';
+    } else if (canProceed.gracePeriodDaysRemaining !== null) {
+      gracePeriodWarning = `You have ${canProceed.gracePeriodDaysRemaining} days remaining to set up Multi-Factor Authentication.`;
+    }
 
     // Check for existing active session (single-session enforcement)
     const existingSessionId = await userService.getActiveSession(user.id);
@@ -252,8 +258,8 @@ authRoutes.post('/login', async (req, res) => {
         sessionId, // Unique per login, used for connection caching
         instanceId: SERVER_INSTANCE_ID, // Invalidates token on server restart
       },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRY }
+      getJwtSecret(),
+      { expiresIn: getJwtExpiry() }
     );
 
     log(`App login successful: ${username} with role ${user.role}, session ${sessionId.substring(0, 8)}...`);
@@ -268,9 +274,13 @@ authRoutes.post('/login', async (req, res) => {
         displayName: user.display_name,
         role: user.role,
         theme_preference: user.theme_preference,
+        auth_provider: user.auth_provider,
+        totp_enabled: user.totp_enabled || false,
+        passkey_enabled: user.passkey_enabled || false,
       },
-      expiresIn: JWT_EXPIRY,
-      gracePeriodWarning, // Warning if 2FA not set up but within grace period
+      expiresIn: getJwtExpiry(),
+      gracePeriodWarning,
+      mfaActionRequired: canProceed.mfaActionRequired || false,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -282,7 +292,7 @@ authRoutes.post('/login', async (req, res) => {
 });
 
 /**
- * POST /api/auth/keypair
+ * POST /api/v1/auth/keypair
  * Authenticate with RSA key pair
  */
 authRoutes.post('/keypair', async (req, res, next) => {
@@ -342,7 +352,7 @@ authRoutes.post('/keypair', async (req, res, next) => {
 });
 
 /**
- * POST /api/auth/pat
+ * POST /api/v1/auth/pat
  * Authenticate with Programmatic Access Token
  */
 authRoutes.post('/pat', async (req, res, next) => {
@@ -401,7 +411,7 @@ authRoutes.post('/pat', async (req, res, next) => {
 });
 
 /**
- * GET /api/auth/validate
+ * GET /api/v1/auth/validate
  * Validate current session token
  */
 authRoutes.get('/validate', async (req, res) => {
@@ -421,7 +431,7 @@ authRoutes.get('/validate', async (req, res) => {
 });
 
 /**
- * GET /api/auth/roles
+ * GET /api/v1/auth/roles
  * Get available roles for current user
  */
 authRoutes.get('/roles', async (req, res) => {
@@ -442,7 +452,7 @@ authRoutes.get('/roles', async (req, res) => {
 });
 
 /**
- * POST /api/auth/switch-role
+ * POST /api/v1/auth/switch-role
  * Switch to a different role
  */
 authRoutes.post('/switch-role', async (req, res) => {
@@ -474,7 +484,7 @@ authRoutes.post('/switch-role', async (req, res) => {
 });
 
 /**
- * POST /api/auth/heartbeat
+ * POST /api/v1/auth/heartbeat
  * Keep session alive - for app users, just confirms JWT is valid
  * (Snowflake connections are per-dashboard, not per-session)
  */
@@ -502,7 +512,7 @@ authRoutes.post('/heartbeat', async (req, res) => {
 });
 
 /**
- * POST /api/auth/refresh
+ * POST /api/v1/auth/refresh
  * Refresh session token
  */
 authRoutes.post('/refresh', async (req, res) => {
@@ -523,7 +533,7 @@ authRoutes.post('/refresh', async (req, res) => {
 });
 
 /**
- * POST /api/auth/logout
+ * POST /api/v1/auth/logout
  * End current session, revoke JWT, and clean up cached connections
  */
 authRoutes.post('/logout', async (req, res) => {
@@ -564,7 +574,7 @@ authRoutes.post('/logout', async (req, res) => {
 });
 
 /**
- * POST /api/auth/test-connection
+ * POST /api/v1/auth/test-connection
  * Test the current Snowflake connection
  */
 authRoutes.post('/test-connection', async (req, res) => {
@@ -603,7 +613,7 @@ authRoutes.post('/test-connection', async (req, res) => {
 });
 
 /**
- * POST /api/auth/update-credentials
+ * POST /api/v1/auth/update-credentials
  * Update the authentication credentials (PAT or keypair)
  */
 authRoutes.post('/update-credentials', async (req, res) => {

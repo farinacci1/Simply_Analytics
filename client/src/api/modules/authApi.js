@@ -24,6 +24,23 @@ export const authApi = {
     return data;
   },
 
+  async emergencyLogin(masterKey) {
+    const res = await fetch(`${API_BASE}/auth/emergency-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ masterKey }),
+    });
+
+    const data = await safeJson(res, { success: false, error: 'Emergency login failed' });
+    if (!res.ok) {
+      throw new Error(data.error || 'Emergency login failed');
+    }
+    if (data.token) {
+      setAuthToken(data.token, data.expiresIn);
+    }
+    return data;
+  },
+
   async loginWithKeyPair(account, username, privateKey, passphrase) {
     const res = await fetchApi('/auth/keypair', {
       method: 'POST',
@@ -106,6 +123,27 @@ export const authApi = {
       throw new Error(data.error || 'Connection test failed');
     }
     return safeJson(res, { success: true });
+  },
+
+  async dbStatus() {
+    const res = await fetchApi('/auth/db-status');
+    if (!res.ok) throw new Error('Failed to check database status');
+    return safeJson(res, { dbReachable: false, userCount: 0 });
+  },
+
+  async emergencyCreateOwner(data) {
+    const res = await fetchApi('/auth/emergency-create-owner', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const result = await safeJson(res, { success: false, error: 'Failed to create owner' });
+    if (!res.ok) throw new Error(result.error || 'Failed to create owner');
+    return result;
+  },
+
+  async getPasswordPolicy() {
+    const res = await fetch(`${API_BASE}/password-policy`);
+    return res.json();
   },
 
   async updateCredentials({ type, token, privateKey, passphrase }) {

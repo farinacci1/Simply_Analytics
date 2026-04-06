@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import configStore from '../config/configStore.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
@@ -6,11 +7,10 @@ const AUTH_TAG_LENGTH = 16;
 const KEY_VERSION = 1;
 
 let _encryptionKey = null;
+let _lastKeyHex = null;
 
 function getKey() {
-  if (_encryptionKey) return _encryptionKey;
-
-  const keyHex = process.env.CREDENTIALS_ENCRYPTION_KEY;
+  const keyHex = configStore.get('CREDENTIALS_ENCRYPTION_KEY') || process.env.CREDENTIALS_ENCRYPTION_KEY;
 
   if (!keyHex || keyHex === 'default-encryption-key-change-in-production') {
     throw new Error(
@@ -26,6 +26,9 @@ function getKey() {
     );
   }
 
+  if (_encryptionKey && _lastKeyHex === keyHex) return _encryptionKey;
+
+  _lastKeyHex = keyHex;
   _encryptionKey = Buffer.from(keyHex, 'hex');
   return _encryptionKey;
 }
@@ -98,7 +101,11 @@ export function validateKeyConfigured() {
   getKey();
 }
 
+export function clearKeyCache() {
+  _encryptionKey = null;
+}
+
 export default {
   encrypt, decrypt, encryptWithKey, decryptWithKey,
-  encryptCredentials, decryptCredentials, parseKeyHex, validateKeyConfigured,
+  encryptCredentials, decryptCredentials, parseKeyHex, validateKeyConfigured, clearKeyCache,
 };

@@ -1,21 +1,28 @@
 import { SAML } from '@node-saml/node-saml';
 import { query } from '../db/db.js';
-
-const SSO_ENABLED = process.env.SSO_ENABLED === 'true';
+import configStore from '../config/configStore.js';
 
 let saml = null;
+let samlConfigHash = null;
 
 function getSaml() {
-  if (saml) return saml;
-  if (!SSO_ENABLED) throw new Error('SSO is not enabled');
+  const enabled = configStore.get('SSO_ENABLED') === 'true';
+  if (!enabled) throw new Error('SSO is not enabled');
 
-  const cert = process.env.SAML_CERT;
+  const cert = configStore.get('SAML_CERT');
+  const entryPoint = configStore.get('SAML_ENTRYPOINT');
+  const issuer = configStore.get('SAML_ISSUER') || 'simply-analytics';
+  const callbackUrl = configStore.get('SAML_CALLBACK_URL');
+
+  const hash = `${cert}|${entryPoint}|${issuer}|${callbackUrl}`;
+  if (saml && samlConfigHash === hash) return saml;
+
   if (!cert) throw new Error('SAML_CERT is required when SSO is enabled');
 
   saml = new SAML({
-    entryPoint: process.env.SAML_ENTRYPOINT,
-    issuer: process.env.SAML_ISSUER || 'simply-analytics',
-    callbackUrl: process.env.SAML_CALLBACK_URL,
+    entryPoint,
+    issuer,
+    callbackUrl,
     cert,
     wantAssertionsSigned: true,
     wantAuthnResponseSigned: false,
@@ -23,12 +30,13 @@ function getSaml() {
     digestAlgorithm: 'sha256',
     maxAssertionAgeMs: 5 * 60 * 1000,
   });
+  samlConfigHash = hash;
 
   return saml;
 }
 
 export function isEnabled() {
-  return SSO_ENABLED;
+  return configStore.get('SSO_ENABLED') === 'true';
 }
 
 export async function getLoginUrl(relayState) {
@@ -39,7 +47,7 @@ export async function getLoginUrl(relayState) {
 
 export async function getMetadata() {
   const s = getSaml();
-  return s.generateServiceProviderMetadata(null, process.env.SAML_CERT);
+  return s.generateServiceProviderMetadata(null, configStore.get('SAML_CERT'));
 }
 
 export async function validateCallback(body) {

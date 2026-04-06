@@ -100,9 +100,10 @@ const UserRow = ({
       </td>
       <td className="col-status">
         <div className="status-badges">
+          {user.auth_provider === 'saml' && <span className="badge badge-mfa" title="SSO Authenticated">SSO</span>}
           {user.totp_enabled && <span className="badge badge-mfa" title="TOTP Enabled">TOTP</span>}
           {user.passkey_enabled && <span className="badge badge-mfa" title="Passkey Enabled">Passkey</span>}
-          {!user.totp_enabled && !user.passkey_enabled && (
+          {user.auth_provider !== 'saml' && !user.totp_enabled && !user.passkey_enabled && (
             <span className="badge badge-warning" title="No MFA">No MFA</span>
           )}
         </div>
@@ -140,7 +141,7 @@ const UserRow = ({
                         <FiLock /> Lock Account
                       </button>
                     )}
-                    {(user.totp_enabled || user.passkey_enabled) && (
+                    {user.auth_provider !== 'saml' && (user.totp_enabled || user.passkey_enabled) && (
                       <>
                         <button onClick={() => { onMfaBypass(user); setMenuOpen(false); }}>
                           <FiClock /> Bypass MFA (4h)

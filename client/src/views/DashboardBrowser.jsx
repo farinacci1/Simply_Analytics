@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FiSearch, FiFolder, FiGrid, FiPlus, FiX,
-  FiEdit2, FiTrash2, FiMoreVertical, FiMove, FiUsers,
+  FiEdit2, FiTrash2, FiMoreVertical, FiMove,
+  FiArrowLeft,
 } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
 import CreateDashboardModal from '../components/CreateDashboardModal';
@@ -10,28 +12,27 @@ import '../styles/DashboardBrowser.css';
 
 import { useBrowserData } from '../components/dashboard-browser/hooks/useBrowserData';
 import { useFolderActions } from '../components/dashboard-browser/hooks/useFolderActions';
-import { useFolderAccess } from '../components/dashboard-browser/hooks/useFolderAccess';
 import {
   Breadcrumb, SearchResults, FolderCard, DashboardCard, EmptyState,
 } from '../components/dashboard-browser/components/BrowserContent';
 import {
-  CreateFolderModal, MoveDashboardModal, FolderAccessModal,
+  CreateFolderModal, MoveDashboardModal,
 } from '../components/dashboard-browser/components/BrowserModals';
 
 export default function DashboardBrowser() {
-  const { currentRole, isAuthenticated, isInitialized } = useAppStore();
+  const { currentRole, isAuthenticated, isInitialized, activeWorkspace } = useAppStore();
+  const navigate = useNavigate();
 
   const bd = useBrowserData(isInitialized, isAuthenticated);
   const fa = useFolderActions(bd.currentFolderId, bd.loadContents);
-  const access = useFolderAccess();
 
   const [showCreateDashboard, setShowCreateDashboard] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const addMenuRef = useRef(null);
 
-  const canCreateDashboards = ['owner', 'admin', 'creator', 'editor'].includes(currentRole);
-  const canManageFolders = ['owner', 'admin', 'creator', 'editor'].includes(currentRole);
+  const canCreateDashboards = ['owner', 'admin', 'editor'].includes(currentRole);
+  const canManageFolders = ['owner', 'admin', 'editor'].includes(currentRole);
 
   const handleContextMenu = (e, item) => {
     setContextMenu({ x: e.clientX, y: e.clientY, ...item });
@@ -60,6 +61,9 @@ export default function DashboardBrowser() {
       {/* Header */}
       <div className="browser-header">
         <div className="header-left">
+          <button className="btn btn-icon btn-back" onClick={() => navigate(`/workspaces/${activeWorkspace?.id || ''}`)} title="Back to workspace">
+            <FiArrowLeft />
+          </button>
           {!bd.currentFolderId ? (
             <h1>Dashboards</h1>
           ) : (
@@ -145,11 +149,6 @@ export default function DashboardBrowser() {
           {contextMenu.folder ? (
             <>
               {(contextMenu.folder.is_owner || ['owner', 'admin'].includes(currentRole)) && (
-                <button onClick={() => { access.openFolderAccessModal(contextMenu.folder); setContextMenu(null); }}>
-                  <FiUsers /> Manage Access
-                </button>
-              )}
-              {(contextMenu.folder.is_owner || ['owner', 'admin'].includes(currentRole)) && (
                 <button onClick={() => setContextMenu(null)}><FiEdit2 /> Rename</button>
               )}
               {(contextMenu.folder.is_owner || ['owner', 'admin'].includes(currentRole)) && (
@@ -221,16 +220,6 @@ export default function DashboardBrowser() {
         />
       )}
 
-      {access.managingAccessFolder && (
-        <FolderAccessModal
-          folder={access.managingAccessFolder} folderGroups={access.folderGroups}
-          loadingFolderAccess={access.loadingFolderAccess}
-          selectedGroupToAdd={access.selectedGroupToAdd} setSelectedGroupToAdd={access.setSelectedGroupToAdd}
-          availableGroupsForFolder={access.getAvailableGroupsForFolder()} availableGroupsCount={access.availableGroups.length}
-          folderAccessError={access.folderAccessError}
-          onAdd={access.handleAddFolderAccess} onRemove={access.handleRemoveFolderAccess} onClose={access.closeFolderAccessModal}
-        />
-      )}
     </div>
   );
 }

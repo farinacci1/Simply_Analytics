@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useAppStore } from '../../../store/appStore';
 import { folderApi, dashboardApi } from '../../../api/apiClient';
 
 export const useFolderActions = (currentFolderId, loadContents) => {
+  const { activeWorkspace } = useAppStore();
   // Create folder
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -38,7 +40,7 @@ export const useFolderActions = (currentFolderId, loadContents) => {
     setCreatingFolder(true);
     setNewFolderError('');
     try {
-      await folderApi.create({ name: newFolderName.trim(), parentId: currentFolderId });
+      await folderApi.create({ name: newFolderName.trim(), parentId: currentFolderId, workspaceId: activeWorkspace?.id });
       setNewFolderName('');
       setShowCreateFolder(false);
       loadContents(currentFolderId);
@@ -83,7 +85,7 @@ export const useFolderActions = (currentFolderId, loadContents) => {
     setFolderSearchQuery('');
     setLoadingFolders(true);
     try {
-      const allFoldersData = await folderApi.getContents(null);
+      const allFoldersData = await folderApi.getContents(null, activeWorkspace?.id);
       setAllFolders(allFoldersData.folders || []);
     } catch (err) {
       console.error('Failed to load folders:', err);
@@ -111,7 +113,7 @@ export const useFolderActions = (currentFolderId, loadContents) => {
     if (!inlineFolderName.trim()) return;
     setCreatingInlineFolder(true);
     try {
-      const newFolder = await folderApi.create({ name: inlineFolderName.trim(), parentId: null });
+      const newFolder = await folderApi.create({ name: inlineFolderName.trim(), parentId: null, workspaceId: activeWorkspace?.id });
       setAllFolders(prev => [...prev, newFolder]);
       setSelectedMoveFolder(newFolder.id);
       setShowInlineCreateFolder(false);

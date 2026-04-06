@@ -131,7 +131,7 @@ async function nativeStartAuthentication(options) {
 }
 
 const SignInModal = ({ isOpen, onClose }) => {
-  const { signIn, complete2FASignIn, isConnecting, connectionError } = useAppStore();
+  const { signIn, emergencySignIn, complete2FASignIn, isConnecting, connectionError } = useAppStore();
   
   const [formData, setFormData] = useState({
     username: '',
@@ -152,6 +152,8 @@ const SignInModal = ({ isOpen, onClose }) => {
 
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
+  const [showEmergencyLogin, setShowEmergencyLogin] = useState(false);
+  const [emergencyKey, setEmergencyKey] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -163,7 +165,7 @@ const SignInModal = ({ isOpen, onClose }) => {
       setTotpDigits(['', '', '', '', '', '']);
       setTimeout(() => usernameInputRef.current?.focus(), 100);
 
-      fetch('/api/saml/status')
+      fetch('/api/v1/saml/status')
         .then(r => r.json())
         .then(data => setSsoEnabled(data.enabled === true))
         .catch(() => setSsoEnabled(false));
@@ -265,14 +267,31 @@ const SignInModal = ({ isOpen, onClose }) => {
       
       onClose();
     } catch (error) {
-      // Check if this is a "session already exists" error
       if (error.message.includes('already signed in')) {
         setShowForceLogin(true);
+        setErrors({ submit: error.message });
+      } else if (error.message.includes('Authentication failed') || error.message.includes('ECONNREFUSED') || error.message.includes('500')) {
+        setShowEmergencyLogin(true);
+        setShowForceLogin(false);
         setErrors({ submit: error.message });
       } else {
         setShowForceLogin(false);
         setErrors({ submit: error.message });
       }
+    }
+  };
+
+  const handleEmergencyLogin = async () => {
+    if (!emergencyKey.trim()) {
+      setErrors({ submit: 'Enter the master encryption key you saved during initial setup.' });
+      return;
+    }
+    setErrors({});
+    try {
+      const result = await emergencySignIn(emergencyKey.trim());
+      if (result.success) onClose();
+    } catch (error) {
+      setErrors({ submit: error.message });
     }
   };
 
@@ -542,6 +561,30 @@ const SignInModal = ({ isOpen, onClose }) => {
                 </div>
               )}
 
+              {/* Emergency login option when DB is unreachable */}
+              {showEmergencyLogin && (
+                <div className="auth-emergency">
+                  <p>Database may be unreachable. Enter the master encryption key you saved during initial setup to access the admin panel.</p>
+                  <input
+                    type="password"
+                    className="auth-emergency-input"
+                    placeholder="Master encryption key"
+                    value={emergencyKey}
+                    onChange={(e) => setEmergencyKey(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="auth-emergency-btn"
+                    onClick={handleEmergencyLogin}
+                    disabled={isConnecting || !emergencyKey.trim()}
+                  >
+                    {isConnecting ? <FiLoader className="spinner" /> : <FiAlertCircle />}
+                    <span>Emergency Admin Login</span>
+                  </button>
+                </div>
+              )}
+
               {/* Submit Button */}
               <button 
                 type="submit" 
@@ -570,7 +613,7 @@ const SignInModal = ({ isOpen, onClose }) => {
                     disabled={ssoLoading}
                     onClick={() => {
                       setSsoLoading(true);
-                      window.location.href = '/api/saml/login';
+                      window.location.href = '/api/v1/saml/login';
                     }}
                   >
                     {ssoLoading ? (

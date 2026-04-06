@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiDatabase, FiMessageSquare, FiShield, FiLoader, FiCheck, FiAlertCircle, FiLock, FiLink, FiFolder, FiHome, FiPlus, FiSearch } from 'react-icons/fi';
+import { FiX, FiDatabase, FiMessageSquare, FiShield, FiLoader, FiCheck, FiAlertCircle, FiLock, FiLink, FiFolder, FiHome, FiPlus, FiSearch, FiServer, FiUser } from 'react-icons/fi';
 import { useAppStore } from '../store/appStore';
-import { semanticApi, dashboardApi, sfConnectionApi, folderApi } from '../api/apiClient';
+import { dashboardApi, sfConnectionApi, folderApi, workspaceApi } from '../api/apiClient';
 import '../styles/CreateDashboardModal.css';
 
 const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) => {
   const { 
     isAuthenticated, 
     loadDashboards,
+    activeWorkspace,
+    currentUser,
   } = useAppStore();
+
+  const hasSecureAuth = currentUser?.auth_provider === 'saml' ||
+    currentUser?.totp_enabled || currentUser?.passkey_enabled;
 
   // Connection state
   const [connections, setConnections] = useState([]);
@@ -16,12 +21,10 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
   const [selectedConnection, setSelectedConnection] = useState(null);
   
   // Resources from selected connection
-  const [availableWarehouses, setAvailableWarehouses] = useState([]);
-  const [availableRoles, setAvailableRoles] = useState([]);
   const [semanticViews, setSemanticViews] = useState([]);
   const [loadingResources, setLoadingResources] = useState(false);
 
-  // Form state
+  // Form state (role/warehouse are derived from the connection, not user-selected)
   const [name, setName] = useState('');
   const [comment, setComment] = useState('');
   const [warehouse, setWarehouse] = useState('');
@@ -50,37 +53,39 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
     if (isOpen && isAuthenticated) {
       loadConnections();
       loadFolders();
-      // Clear previous selections
       setSelectedConnection(null);
       setWarehouse('');
       setRole('');
       setSelectedSemanticViews([]);
-      setAvailableWarehouses([]);
-      setAvailableRoles([]);
       setSemanticViews([]);
-      setSelectedFolderId(folderId); // Use prop if provided
+      setSelectedFolderId(folderId);
     }
   }, [isOpen, isAuthenticated, folderId]);
 
-  // Load roles when connection changes (step 1)
+  // When connection changes, resolve role/warehouse/resources from the connection
   useEffect(() => {
-    if (selectedConnection) {
-      loadRolesForConnection(selectedConnection);
-    }
+    if (!selectedConnection) return;
+    loadConnectionResources(selectedConnection);
   }, [selectedConnection]);
-
-  // Load warehouses and semantic views when role changes (step 2)
-  useEffect(() => {
-    if (selectedConnection && role) {
-      loadResourcesForRole(selectedConnection, role);
-    }
-  }, [selectedConnection, role]);
 
   const loadConnections = async () => {
     setLoadingConnections(true);
     try {
-      const response = await sfConnectionApi.getAll();
-      setConnections(response.connections || []);
+      if (activeWorkspace?.id) {
+        const wsDetail = await workspaceApi.get(activeWorkspace.id);
+        const wcs = wsDetail?.connections || [];
+        setConnections(wcs.map(wc => ({
+          id: wc.connection_id,
+          name: wc.connection_name,
+          account: wc.connection_account,
+          default_role: wc.role,
+          default_warehouse: wc.warehouse,
+          _wsConn: wc,
+        })));
+      } else {
+        const response = await sfConnectionApi.getAll();
+        setConnections(response.connections || []);
+      }
     } catch (err) {
       console.error('Failed to load connections:', err);
       setError('Failed to load connections');
@@ -91,7 +96,7 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
 
   const loadFolders = async () => {
     try {
-      const response = await folderApi.getContents(null);
+      const response = await folderApi.getContents(null, activeWorkspace?.id);
       setFolders(response.folders || []);
     } catch (err) {
       console.error('Failed to load folders:', err);
@@ -105,7 +110,8 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
     try {
       const newFolder = await folderApi.create({
         name: inlineFolderName.trim(),
-        parentId: null
+        parentId: null,
+        workspaceId: activeWorkspace?.id,
       });
       // Add to folder list and select it (API returns folder directly, not wrapped)
       setFolders([...folders, newFolder]);
@@ -121,54 +127,51 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
     }
   };
 
-  // Step 1: Load only roles when connection is selected
-  const loadRolesForConnection = async (connectionId) => {
+  // Load role/warehouse/semantic views for the selected connection
+  const loadConnectionResources = async (connectionId) => {
     setLoadingResources(true);
     setRole('');
     setWarehouse('');
-    setAvailableWarehouses([]);
     setSemanticViews([]);
     setSelectedSemanticViews([]);
-    
-    try {
-      // Pass null for role to get only roles
-      const resources = await sfConnectionApi.getResources(connectionId, null);
-      setAvailableRoles(resources.roles || []);
-      
-      // Set default role from connection if available
-      const conn = connections.find(c => c.id === connectionId);
-      if (conn && conn.default_role && resources.roles?.includes(conn.default_role)) {
-        setRole(conn.default_role);
-      }
-    } catch (err) {
-      console.error('Failed to load roles:', err);
-      setError('Failed to load roles for this connection');
-    } finally {
-      setLoadingResources(false);
-    }
-  };
 
-  // Step 2: Load warehouses and semantic views for selected role
-  const loadResourcesForRole = async (connectionId, selectedRole) => {
-    setLoadingResources(true);
-    setWarehouse('');
-    setAvailableWarehouses([]);
-    setSemanticViews([]);
-    
     try {
-      // Pass role to get warehouses and semantic views available to that role
-      const resources = await sfConnectionApi.getResources(connectionId, selectedRole);
-      setAvailableWarehouses(resources.warehouses || []);
-      setSemanticViews(resources.semanticViews || []);
-      
-      // Set default warehouse from connection if available
-      const conn = connections.find(c => c.id === connectionId);
-      if (conn && conn.default_warehouse && resources.warehouses?.includes(conn.default_warehouse)) {
-        setWarehouse(conn.default_warehouse);
+      const parseFqn = (fqn) => {
+        const parts = (fqn || '').split('.');
+        return {
+          name: parts.length > 0 ? parts[parts.length - 1] : fqn,
+          database: parts.length >= 3 ? parts[0] : undefined,
+          schema: parts.length >= 3 ? parts[1] : undefined,
+          fullyQualifiedName: fqn,
+        };
+      };
+
+      if (activeWorkspace?.id) {
+        // Workspace mode: everything from workspace connection config
+        const wsDetail = await workspaceApi.get(activeWorkspace.id);
+        const wsConn = (wsDetail?.connections || []).find(wc => wc.connection_id === connectionId);
+        if (wsConn) {
+          setRole(wsConn.role || '');
+          setWarehouse(wsConn.warehouse || '');
+          setSemanticViews(
+            (wsDetail?.semanticViews || [])
+              .filter(v => v.workspace_connection_id === wsConn.id)
+              .map(v => parseFqn(v.semantic_view_fqn))
+          );
+        }
+      } else {
+        // No workspace: role/warehouse from connection defaults, semantic views from Snowflake
+        const conn = connections.find(c => c.id === connectionId);
+        setRole(conn?.default_role || '');
+        setWarehouse(conn?.default_warehouse || '');
+
+        if (conn?.default_role) {
+          const resources = await sfConnectionApi.getResources(connectionId, conn.default_role);
+          setSemanticViews(resources.semanticViews || []);
+        }
       }
     } catch (err) {
-      console.error('Failed to load resources:', err);
-      setError('Failed to load resources for this role');
+      console.error('Failed to load connection resources:', err);
     } finally {
       setLoadingResources(false);
     }
@@ -229,9 +232,10 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
       warehouse,
       role,
       semanticViewsReferenced: formattedSemanticViews,
-      ownerRole: role,  // Use selected Snowflake role
-      createdBy: snowflakeUsername,  // Use Snowflake username from connection
-      folderId: selectedFolderId || null,  // Folder to place the dashboard in
+      ownerRole: role,
+      createdBy: snowflakeUsername,
+      folderId: selectedFolderId || null,
+      workspaceId: activeWorkspace.id,
     };
 
     try {
@@ -288,8 +292,6 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
     setWarehouse('');
     setRole('');
     setSelectedSemanticViews([]);
-    setAvailableWarehouses([]);
-    setAvailableRoles([]);
     setSemanticViews([]);
     setError(null);
     setSubmitError(null);
@@ -306,7 +308,7 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
 
   if (!isOpen) return null;
 
-  const canSubmit = isAuthenticated && selectedConnection && name.trim() && warehouse && role;
+  const canSubmit = isAuthenticated && hasSecureAuth && selectedConnection && name.trim() && warehouse && role;
 
   return (
     <div className="modal-overlay">
@@ -326,9 +328,20 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-body">
+          <div className={`modal-body ${!hasSecureAuth ? 'mfa-locked' : ''}`}>
+            {/* MFA/SSO Required Notice */}
+            {!hasSecureAuth && (
+              <div className="auth-required-notice">
+                <FiShield className="notice-icon" />
+                <div className="notice-content">
+                  <strong>MFA or SSO required</strong>
+                  <p>Set up Multi-Factor Authentication in your settings before creating dashboards.</p>
+                </div>
+              </div>
+            )}
+
             {/* Authentication Required Notice */}
-            {!isAuthenticated && (
+            {!isAuthenticated && hasSecureAuth && (
               <div className="auth-required-notice">
                 <FiLock className="notice-icon" />
                 <div className="notice-content">
@@ -337,38 +350,6 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
                 </div>
               </div>
             )}
-
-            {/* Connection Selection - FIRST STEP */}
-            <div className="form-group">
-              <label className="form-label">
-                <FiLink className="label-icon" />
-                Snowflake Connection *
-              </label>
-              {loadingConnections ? (
-                <div className="form-loading">
-                  <FiLoader className="spinner" /> Loading connections...
-                </div>
-              ) : connections.length === 0 ? (
-                <div className="form-notice connection-notice">
-                  <p>No Snowflake connections found.</p>
-                  <p className="notice-hint">Go to Settings → Snowflake Connections to add one.</p>
-                </div>
-              ) : (
-                <select
-                  className="form-select"
-                  value={selectedConnection || ''}
-                  onChange={(e) => setSelectedConnection(e.target.value || null)}
-                  disabled={!isAuthenticated}
-                >
-                  <option value="">Select a connection...</option>
-                  {connections.map((conn) => (
-                    <option key={conn.id} value={conn.id}>
-                      {conn.name} ({conn.account})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
 
             {/* Dashboard Name */}
             <div className="form-group">
@@ -380,7 +361,6 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
-                disabled={!isAuthenticated || !selectedConnection}
               />
             </div>
 
@@ -396,7 +376,6 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={2}
-                disabled={!selectedConnection}
               />
             </div>
 
@@ -522,77 +501,49 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
               </div>
             </div>
 
-            {/* Role Selection - MUST come before Warehouse */}
+            {/* Connection Selection */}
             <div className="form-group">
               <label className="form-label">
-                <FiShield className="label-icon" />
-                Role *
+                <FiLink className="label-icon" />
+                Snowflake Connection *
               </label>
-              {!selectedConnection ? (
-                <div className="form-notice">
-                  Select a connection first
-                </div>
-              ) : loadingResources && availableRoles.length === 0 ? (
+              {loadingConnections ? (
                 <div className="form-loading">
-                  <FiLoader className="spinner" /> Loading roles...
+                  <FiLoader className="spinner" /> Loading connections...
                 </div>
-              ) : availableRoles.length === 0 ? (
-                <div className="form-notice">
-                  No roles available
+              ) : connections.length === 0 ? (
+                <div className="form-notice connection-notice">
+                  <FiAlertCircle className="notice-icon" />
+                  <div>
+                    <p>No connections assigned to this workspace.</p>
+                    <p className="notice-hint">Create a Snowflake connection and assign it to this workspace first.</p>
+                  </div>
                 </div>
               ) : (
                 <select
                   className="form-select"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
+                  value={selectedConnection || ''}
+                  onChange={(e) => setSelectedConnection(e.target.value || null)}
+                  disabled={!isAuthenticated || !hasSecureAuth}
                 >
-                  <option value="">Select a role...</option>
-                  {availableRoles.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
+                  <option value="">Select a connection...</option>
+                  {connections.map((conn) => (
+                    <option key={conn.id} value={conn.id}>
+                      {conn.name} ({conn.account})
                     </option>
                   ))}
                 </select>
               )}
             </div>
 
-            {/* Warehouse Selection - After Role */}
-            <div className="form-group">
-              <label className="form-label">
-                <FiDatabase className="label-icon" />
-                Warehouse *
-              </label>
-              {!selectedConnection ? (
-                <div className="form-notice">
-                  Select a connection first
-                </div>
-              ) : !role ? (
-                <div className="form-notice">
-                  Select a role first to see available warehouses
-                </div>
-              ) : loadingResources ? (
-                <div className="form-loading">
-                  <FiLoader className="spinner" /> Loading warehouses...
-                </div>
-              ) : availableWarehouses.length === 0 ? (
-                <div className="form-notice">
-                  No warehouses available for this role
-                </div>
-              ) : (
-                <select
-                  className="form-select"
-                  value={warehouse}
-                  onChange={(e) => setWarehouse(e.target.value)}
-                >
-                  <option value="">Select a warehouse...</option>
-                  {availableWarehouses.map((wh) => (
-                    <option key={wh} value={wh}>
-                      {wh}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            {/* Role & Warehouse (from connection) */}
+            {selectedConnection && !loadingResources && (role || warehouse) && (
+              <div className="form-inline-meta">
+                <span className="meta-chip"><FiShield size={11} /> <span className="meta-label">Role</span> <span className="meta-value">{role}</span></span>
+                <span className="meta-sep" />
+                <span className="meta-chip"><FiServer size={11} /> <span className="meta-label">Warehouse</span> <span className="meta-value">{warehouse}</span></span>
+              </div>
+            )}
 
             {/* Semantic Views Multi-Select */}
             <div className="form-group">
@@ -604,17 +555,13 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
                 <div className="form-notice">
                   Select a connection first
                 </div>
-              ) : !role ? (
-                <div className="form-notice">
-                  Select a role first
-                </div>
               ) : loadingResources ? (
                 <div className="form-loading">
                   <FiLoader className="spinner" /> Loading semantic views...
                 </div>
               ) : semanticViews.length === 0 ? (
                 <div className="form-notice">
-                  No semantic views available for this role
+                  No semantic views assigned to this connection
                 </div>
               ) : (
                 <div className="semantic-views-selector">
@@ -715,7 +662,7 @@ const CreateDashboardModal = ({ isOpen, onClose, onSuccess, folderId = null }) =
               type="submit" 
               className="btn btn-primary" 
               disabled={!canSubmit || isSubmitting}
-              title={!isAuthenticated ? 'Sign in to create dashboards' : !selectedConnection ? 'Select a connection' : ''}
+              title={!hasSecureAuth ? 'MFA or SSO required' : !isAuthenticated ? 'Sign in to create dashboards' : !selectedConnection ? 'Select a connection' : ''}
             >
               {isSubmitting ? (
                 <>
